@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // TickSnapshot represents a snapshot of market data for multiple tickers at a specific point in time
 // It includes average metrics, liquidation counts,and a map of Ticker data keyed by a TickerName
@@ -38,4 +41,9 @@ type TickSnapshotAvg struct {
 	SellDiff     float64 `db:"sell_diff" json:"sell_diff" bson:"sell_diff"`
 	BuyDiff      float64 `db:"buy_diff" json:"buy_diff" bson:"buy_diff"`
 	TickersCount int16   `db:"tickers_count" json:"tickers_count" bson:"tickers_count"`
+}
+
+// TickSnapshotRepository represents the tick snapshot repository contract
+type TickSnapshotRepository interface {
+	Create(ctx context.Context, ts *TickSnapshot) error
 }
