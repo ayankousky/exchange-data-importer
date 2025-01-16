@@ -27,13 +27,13 @@ type Tick struct {
 	Btsl           int16   `db:"btsl" json:"btsl" bson:"btsl"`       // 1s bitcoin total short liquidations
 	Lmltc          int32   `db:"lmltc" json:"lmltc" bson:"lmltc"`    // last minute total long liquidations count
 
-	Avg *TickSnapshotAvg `db:"avg" json:"avg" bson:"avg"`
+	Avg *TickAvg `db:"avg" json:"avg" bson:"avg"`
 	// store data as map to be able to query by ticker name or project the data
 	Data map[TickerName]*Ticker `db:"data" json:"data" bson:"data"`
 }
 
-// TickSnapshotAvg represents the average of all tickers in a snapshot
-type TickSnapshotAvg struct {
+// TickAvg represents the average of all tickers in a snapshot
+type TickAvg struct {
 	PD           float64 `db:"pd" json:"pd" bson:"pd"`
 	PD20         float64 `db:"pd_20" json:"pd_20" bson:"pd_20"`
 	Max10        float64 `db:"max_10" json:"max_10" bson:"max_10"`
@@ -43,8 +43,8 @@ type TickSnapshotAvg struct {
 	TickersCount int16   `db:"tickers_count" json:"tickers_count" bson:"tickers_count"`
 }
 
-// TickSnapshotRepository represents the tick snapshot repository contract
-type TickSnapshotRepository interface {
+// TickRepository represents the tick snapshot repository contract
+type TickRepository interface {
 	Create(ctx context.Context, ts *Tick) error
 	GetHistorySince(ctx context.Context, since time.Time) ([]*Tick, error)
 }

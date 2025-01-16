@@ -14,14 +14,14 @@ const MaxTickHistory = 200
 // RepositoryFactory is a contract for creating repositories
 // each exchange must have its own separate repository
 type RepositoryFactory interface {
-	GetTickRepository(name string) domain.TickSnapshotRepository
+	GetTickRepository(name string) domain.TickRepository
 	GetLiquidationRepository(name string) domain.LiquidationRepository
 }
 
 // Importer is responsible for importing data from an exchange and storing it in the database
 type Importer struct {
 	Exchange              exchanges.Exchange
-	TickRepository        domain.TickSnapshotRepository
+	TickRepository        domain.TickRepository
 	LiquidationRepository domain.LiquidationRepository
 
 	tickerHistory map[domain.TickerName][]*domain.Ticker

@@ -16,7 +16,7 @@ func NewMongoRepoFactory(client *mongo.Client) (*Factory, error) {
 }
 
 // GetTickRepository returns a new TickRepository
-func (f *Factory) GetTickRepository(name string) domain.TickSnapshotRepository {
+func (f *Factory) GetTickRepository(name string) domain.TickRepository {
 	return &Tick{db: f.client.Database("exchange").Collection(name + "_tick")}
 }
 
