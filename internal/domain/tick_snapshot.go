@@ -5,10 +5,10 @@ import (
 	"time"
 )
 
-// TickSnapshot represents a snapshot of market data for multiple tickers at a specific point in time
+// Tick represents a snapshot of market data for multiple tickers at a specific point in time
 // It includes average metrics, liquidation counts,and a map of Ticker data keyed by a TickerName
 // This item is stored in the database
-type TickSnapshot struct {
+type Tick struct {
 	ID        string    `db:"_id" json:"_id" bson:"_id"`
 	StartAt   time.Time `db:"start_at" json:"start_at" bson:"start_at"`       // handling start at
 	FetchedAt time.Time `db:"fetched_at" json:"fetched_at" bson:"fetched_at"` // fetched from exchange at
@@ -45,5 +45,5 @@ type TickSnapshotAvg struct {
 
 // TickSnapshotRepository represents the tick snapshot repository contract
 type TickSnapshotRepository interface {
-	Create(ctx context.Context, ts *TickSnapshot) error
+	Create(ctx context.Context, ts *Tick) error
 }

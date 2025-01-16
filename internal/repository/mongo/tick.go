@@ -15,7 +15,7 @@ type Tick struct {
 var _ domain.TickSnapshotRepository = &Tick{}
 
 // Create method stores a tick snapshot in the database
-func (r *Tick) Create(ctx context.Context, tick *domain.TickSnapshot) error {
+func (r *Tick) Create(ctx context.Context, tick *domain.Tick) error {
 	_, err := r.db.InsertOne(ctx, tick)
 	if err != nil {
 		log.Default().Printf("Error inserting tick snapshot: %v", err)
