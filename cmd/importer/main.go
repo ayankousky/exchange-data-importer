@@ -32,10 +32,7 @@ func main() {
 	mongoFactory, _ := mongo.NewMongoRepoFactory(mongoClient)
 
 	binanceImporter := importer.NewImporter(binanceClient, mongoFactory)
-	err = binanceImporter.StartImport()
-	if err != nil {
-		fmt.Println(err)
-	}
+	binanceImporter.StartImportEverySecond()
 
 	_, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

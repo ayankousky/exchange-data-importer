@@ -14,8 +14,8 @@ type Tick struct {
 	FetchedAt time.Time `db:"fetched_at" json:"fetched_at" bson:"fetched_at"` // fetched from exchange at
 	CreatedAt time.Time `db:"created_at" json:"created_at" bson:"created_at"` // ready to be stored at
 
-	FetchDuration    int16 `db:"fetch_duration" json:"fetch_duration" bson:"fetch_duration"`
-	HandlingDuration int16 `db:"handling_duration" json:"handling_duration" bson:"handling_duration"`
+	FetchDuration    int64         `db:"fetch_duration" json:"fetch_duration" bson:"fetch_duration"`
+	HandlingDuration time.Duration `db:"handling_duration" json:"handling_duration" bson:"handling_duration"`
 
 	TickAvgBuyOpen float64 `db:"tick_avg_buy_open" json:"tick_avg_buy_open" bson:"tick_avg_buy_open"`
 	Tl1            int16   `db:"tl_1" json:"tl_1" bson:"tl_1"`       // 1s second total long liquidations
@@ -46,4 +46,5 @@ type TickSnapshotAvg struct {
 // TickSnapshotRepository represents the tick snapshot repository contract
 type TickSnapshotRepository interface {
 	Create(ctx context.Context, ts *Tick) error
+	GetHistorySince(ctx context.Context, since time.Time) ([]*Tick, error)
 }
