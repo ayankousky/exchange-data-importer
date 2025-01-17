@@ -1,6 +1,8 @@
 package mongo
 
 import (
+	"context"
+	"fmt"
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -17,7 +19,17 @@ func NewMongoRepoFactory(client *mongo.Client) (*Factory, error) {
 
 // GetTickRepository returns a new TickRepository
 func (f *Factory) GetTickRepository(name string) domain.TickRepository {
-	return &Tick{db: f.client.Database("exchange").Collection(name + "_tick")}
+	db := f.client.Database("exchange").Collection(name + "_tick")
+
+	// create required indexes
+	_, err := db.Indexes().CreateOne(context.Background(), mongo.IndexModel{
+		Keys: map[string]interface{}{"created_at": 1},
+	})
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	return &Tick{db: db}
 }
 
 // GetLiquidationRepository returns a new LiquidationRepository

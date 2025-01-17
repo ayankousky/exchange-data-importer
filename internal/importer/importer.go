@@ -9,7 +9,7 @@ import (
 )
 
 // MaxTickHistory is the maximum number of tick snapshots to keep in memory
-const MaxTickHistory = 200
+const MaxTickHistory = 25
 
 // RepositoryFactory is a contract for creating repositories
 // each exchange must have its own separate repository
@@ -68,6 +68,9 @@ func (i *Importer) StartImport() error {
 		}
 		data[tickerData.Symbol] = tickerData
 		i.addTickerHistory(tickerData)
+		if len(i.tickHistory) > 0 {
+			tickerData.CalculateIndicators(i.tickerHistory[tickerData.Symbol], i.tickHistory[len(i.tickHistory)-1])
+		}
 	}
 	tick.Data = data
 
@@ -112,17 +115,44 @@ func (i *Importer) addTickHistory(tick *domain.Tick) {
 	i.tickHistory = append(i.tickHistory, tick)
 }
 
+// history is a map of TickerName to a list of Ticker data for that symbol
+// 1 item = 1 minute of data (no need to store for each second)
 func (i *Importer) addTickerHistory(ticker *domain.Ticker) {
 	if len(i.tickerHistory[ticker.Symbol]) >= MaxTickHistory {
 		// Remove the oldest item (index 0)
 		i.tickerHistory[ticker.Symbol] = i.tickerHistory[ticker.Symbol][1:]
 	}
 
-	i.tickerHistory[ticker.Symbol] = append(i.tickerHistory[ticker.Symbol], ticker)
+	// Retrieve the last ticker data for this symbol, if it exists
+	var lastTickerData *domain.Ticker
+	if len(i.tickerHistory[ticker.Symbol]) > 0 {
+		lastTickerData = i.tickerHistory[ticker.Symbol][len(i.tickerHistory[ticker.Symbol])-1]
+	}
+
+	// If there is no data for this minute, create a new history item
+	if lastTickerData == nil || !lastTickerData.Date.Truncate(time.Minute).Equal(ticker.Date.Truncate(time.Minute)) {
+		ticker.Max = ticker.Ask
+		ticker.Min = ticker.Ask
+		i.tickerHistory[ticker.Symbol] = append(i.tickerHistory[ticker.Symbol], ticker)
+	} else {
+		// Update the existing lastTickerData directly
+		if ticker.Ask > lastTickerData.Max {
+			lastTickerData.Max = ticker.Ask
+		}
+		if ticker.Ask < lastTickerData.Min {
+			lastTickerData.Min = ticker.Ask
+		}
+		lastTickerData.Ask = ticker.Ask
+		lastTickerData.Bid = ticker.Bid
+		lastTickerData.Date = ticker.Date
+
+		ticker.Max = lastTickerData.Max
+		ticker.Min = lastTickerData.Min
+	}
 }
 
 func (i *Importer) initHistory() {
-	history, _ := i.TickRepository.GetHistorySince(context.Background(), time.Now().Add(-(MaxTickHistory+10)*time.Second))
+	history, _ := i.TickRepository.GetHistorySince(context.Background(), time.Now().Add(-MaxTickHistory*time.Minute))
 	for _, tick := range history {
 		i.addTickHistory(tick)
 		for _, ticker := range tick.Data {

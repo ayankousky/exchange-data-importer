@@ -2,6 +2,7 @@ package mongo
 
 import (
 	"context"
+	"fmt"
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -37,6 +38,7 @@ func (r *Tick) GetHistorySince(ctx context.Context, since time.Time) ([]*domain.
 
 	cursor, err := r.db.Find(ctx, filter, findOptions)
 	if err != nil {
+		fmt.Println(err)
 		return nil, err
 	}
 	defer cursor.Close(ctx)
