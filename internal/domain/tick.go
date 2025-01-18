@@ -2,7 +2,7 @@ package domain
 
 import (
 	"context"
-	"math"
+	"github.com/ayankousky/exchange-data-importer/pkg/utils/mathutils"
 	"time"
 )
 
@@ -18,15 +18,15 @@ type Tick struct {
 	FetchDuration    int64 `db:"fetch_duration" json:"fetch_duration" bson:"fetch_duration"`
 	HandlingDuration int64 `db:"handling_duration" json:"handling_duration" bson:"handling_duration"`
 
-	TickAvgBuyOpen float64 `db:"tick_avg_buy_open" json:"tick_avg_buy_open" bson:"tick_avg_buy_open"`
-	Tl1            int16   `db:"tl_1" json:"tl_1" bson:"tl_1"`       // 1s second total long liquidations
-	Tl2            int16   `db:"tl_2" json:"tl_2" bson:"tl_2"`       // 2s second total long liquidations
-	Tl5            int16   `db:"tl_5" json:"tl_5" bson:"tl_5"`       // 5s second total long liquidations
-	Tsl1           int16   `db:"tsl_1" json:"tsl_1" bson:"tsl_1"`    // 1s second total short liquidations
-	Tsl2           int16   `db:"tsl_2" json:"tsl_2" bson:"tsl_2"`    // 2s second total short liquidations
-	Tsl10          int16   `db:"tsl_10" json:"tsl_10" bson:"tsl_10"` // 10s second total short liquidations
-	Btsl           int16   `db:"btsl" json:"btsl" bson:"btsl"`       // 1s bitcoin total short liquidations
-	Lmltc          int32   `db:"lmltc" json:"lmltc" bson:"lmltc"`    // last minute total long liquidations count
+	AvgBuy10 float64 `db:"tick_avg_buy_open" json:"tick_avg_buy_open" bson:"tick_avg_buy_open"`
+	Tl1      int16   `db:"tl_1" json:"tl_1" bson:"tl_1"`       // 1s second total long liquidations
+	Tl2      int16   `db:"tl_2" json:"tl_2" bson:"tl_2"`       // 2s second total long liquidations
+	Tl5      int16   `db:"tl_5" json:"tl_5" bson:"tl_5"`       // 5s second total long liquidations
+	Tsl1     int16   `db:"tsl_1" json:"tsl_1" bson:"tsl_1"`    // 1s second total short liquidations
+	Tsl2     int16   `db:"tsl_2" json:"tsl_2" bson:"tsl_2"`    // 2s second total short liquidations
+	Tsl10    int16   `db:"tsl_10" json:"tsl_10" bson:"tsl_10"` // 10s second total short liquidations
+	Btsl     int16   `db:"btsl" json:"btsl" bson:"btsl"`       // 1s bitcoin total short liquidations
+	Lmltc    int32   `db:"lmltc" json:"lmltc" bson:"lmltc"`    // last minute total long liquidations count
 
 	Avg *TickAvg `db:"avg" json:"avg" bson:"avg"`
 	// store data as map to be able to query by ticker name or project the data
@@ -58,52 +58,42 @@ func (t *Tick) CalculateIndicators(history []*Tick) {
 	}
 	prevTick := history[len(history)-2]
 
-	var totalSellDiff, totalBuyDiff, totalPd, totalPd20, totalMax10, totalMin10 float64
-	var count int16
+	// If we have at least 10 ticks, compute an average Buy price for the last 10
+	if len(history) >= 10 {
+		var sumTickAvgBuyOpen float64
+		for i := len(history) - 10; i < len(history); i++ {
+			sumTickAvgBuyOpen += history[i].Avg.BuyDiff
+		}
+		t.AvgBuy10 = mathutils.Round(sumTickAvgBuyOpen/10, 6)
+	}
 
+	// Calculate the averages for the current tick
+	var sumSellDiff, sumBuyDiff, sumPd, sumPd20, sumMax10, sumMin10, count float64
 	for _, tickerCurrData := range t.Data {
 		tickerPrevData, ok := prevTick.Data[tickerCurrData.Symbol]
 		if !ok {
 			continue
 		}
-
-		sellDiff := math.Round((tickerCurrData.Bid-tickerPrevData.Bid)/tickerPrevData.Bid*100*100) / 100
-		buyDiff := math.Round((tickerCurrData.Ask-tickerPrevData.Ask)/tickerPrevData.Ask*100*100) / 100
-		if sellDiff > 1 {
-			sellDiff = 1
-		}
-		if sellDiff < -1 {
-			sellDiff = -1
-		}
-		if buyDiff > 1 {
-			buyDiff = 1
-		}
-		if buyDiff < -1 {
-			buyDiff = -1
-		}
-
-		totalSellDiff += sellDiff
-		totalBuyDiff += buyDiff
-		totalPd += tickerCurrData.Pd
-		totalPd20 += tickerCurrData.Pd20
-		totalMax10 += (tickerCurrData.Max10 - tickerCurrData.Ask) / tickerCurrData.Max10 * 100
-		totalMin10 += (tickerCurrData.Min10 - tickerCurrData.Ask) / tickerCurrData.Min10 * 100
 		count++
-	}
 
-	if len(history) >= 10 {
-		var totalTickAvgBuyOpen float64
-		for i := len(history) - 10; i < len(history); i++ {
-			totalTickAvgBuyOpen += history[i].Avg.BuyDiff
-		}
-		t.TickAvgBuyOpen = math.Round(totalTickAvgBuyOpen/10*1000000) / 1000000
-	}
+		buyDiff := mathutils.Clamp(mathutils.PercDiff(tickerCurrData.Ask, tickerPrevData.Ask, 2), -1, 1)
+		sellDiff := mathutils.Clamp(mathutils.PercDiff(tickerCurrData.Bid, tickerPrevData.Bid, 2), -1, 1)
+		sumBuyDiff += buyDiff
+		sumSellDiff += sellDiff
 
-	t.Avg.SellDiff = math.Round(totalSellDiff/float64(count)*10000) / 10000
-	t.Avg.BuyDiff = math.Round(totalBuyDiff/float64(count)*10000) / 10000
-	t.Avg.PD = math.Round(totalPd/float64(count)*100) / 100
-	t.Avg.PD20 = math.Round(totalPd20/float64(count)*100) / 100
-	t.Avg.Max10 = math.Round(totalMax10/float64(count)*100) / 100
-	t.Avg.Min10 = math.Round(totalMin10/float64(count)*100) / 100
-	t.Avg.TickersCount = count
+		sumPd += tickerCurrData.Pd
+		sumPd20 += tickerCurrData.Pd20
+
+		sumMax10 += mathutils.PercDiff(tickerCurrData.Ask, tickerCurrData.Max10, -1)
+		sumMin10 += mathutils.PercDiff(tickerCurrData.Ask, tickerCurrData.Min10, -1)
+	}
+	if count > 0 {
+		t.Avg.SellDiff = mathutils.Round(sumSellDiff/count, 4)
+		t.Avg.BuyDiff = mathutils.Round(sumBuyDiff/count, 4)
+		t.Avg.PD = mathutils.Round(sumPd/count, 2)
+		t.Avg.PD20 = mathutils.Round(sumPd20/count, 2)
+		t.Avg.Max10 = mathutils.Round(sumMax10/count, 2)
+		t.Avg.Min10 = mathutils.Round(sumMin10/count, 2)
+		t.Avg.TickersCount = int16(count)
+	}
 }
