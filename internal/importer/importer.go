@@ -20,9 +20,9 @@ type RepositoryFactory interface {
 
 // Importer is responsible for importing data from an exchange and storing it in the database
 type Importer struct {
-	Exchange              exchanges.Exchange
-	TickRepository        domain.TickRepository
-	LiquidationRepository domain.LiquidationRepository
+	exchange              exchanges.Exchange
+	tickRepository        domain.TickRepository
+	liquidationRepository domain.LiquidationRepository
 
 	tickerHistory map[domain.TickerName][]*domain.Ticker
 	tickHistory   []*domain.Tick
@@ -31,9 +31,9 @@ type Importer struct {
 // NewImporter creates a new Importer
 func NewImporter(exchange exchanges.Exchange, repositoryFactory RepositoryFactory) *Importer {
 	return &Importer{
-		Exchange:              exchange,
-		TickRepository:        repositoryFactory.GetTickRepository(exchange.GetName()),
-		LiquidationRepository: repositoryFactory.GetLiquidationRepository(exchange.GetName()),
+		exchange:              exchange,
+		tickRepository:        repositoryFactory.GetTickRepository(exchange.GetName()),
+		liquidationRepository: repositoryFactory.GetLiquidationRepository(exchange.GetName()),
 
 		tickerHistory: make(map[domain.TickerName][]*domain.Ticker),
 		tickHistory:   make([]*domain.Tick, 0),
@@ -44,7 +44,7 @@ func NewImporter(exchange exchanges.Exchange, repositoryFactory RepositoryFactor
 func (i *Importer) StartImport() error {
 	startAt := time.Now()
 
-	tickers, err := i.Exchange.FetchTickers(context.Background())
+	tickers, err := i.exchange.FetchTickers(context.Background())
 	if err != nil {
 		return err
 	}
@@ -69,19 +69,17 @@ func (i *Importer) StartImport() error {
 		}
 		data[tickerData.Symbol] = tickerData
 		i.addTickerHistory(tickerData)
-		if len(i.tickHistory) > 0 {
-			tickerData.CalculateIndicators(i.tickerHistory[tickerData.Symbol], i.tickHistory[len(i.tickHistory)-1])
-		}
+		tickerData.CalculateIndicators(i.getTickerHistory(tickerData.Symbol), i.getLastTick())
 	}
 	tick.Data = data
 
 	i.addTickHistory(tick)
-	tick.CalculateIndicators(i.tickHistory)
+	tick.CalculateIndicators(i.getTickHistory())
 
 	// Store the tick in the database
 	tick.CreatedAt = time.Now()
 	tick.HandlingDuration = time.Since(fetchedAt).Milliseconds()
-	err = i.TickRepository.Create(context.Background(), tick)
+	err = i.tickRepository.Create(context.Background(), tick)
 
 	if err != nil {
 		return err
@@ -154,11 +152,24 @@ func (i *Importer) addTickerHistory(ticker *domain.Ticker) {
 }
 
 func (i *Importer) initHistory() {
-	history, _ := i.TickRepository.GetHistorySince(context.Background(), time.Now().Add(-MaxTickHistory*time.Minute))
+	history, _ := i.tickRepository.GetHistorySince(context.Background(), time.Now().Add(-MaxTickHistory*time.Minute))
 	for _, tick := range history {
 		i.addTickHistory(tick)
 		for _, ticker := range tick.Data {
 			i.addTickerHistory(ticker)
 		}
 	}
+}
+
+func (i *Importer) getTickHistory() []*domain.Tick {
+	return i.tickHistory
+}
+func (i *Importer) getTickerHistory(tickerName domain.TickerName) []*domain.Ticker {
+	return i.tickerHistory[tickerName]
+}
+func (i *Importer) getLastTick() *domain.Tick {
+	if len(i.tickHistory) > 0 {
+		return i.tickHistory[len(i.tickHistory)-1]
+	}
+	return nil
 }
