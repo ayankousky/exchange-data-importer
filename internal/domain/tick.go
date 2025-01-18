@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"math"
 	"time"
 )
 
@@ -14,8 +15,8 @@ type Tick struct {
 	FetchedAt time.Time `db:"fetched_at" json:"fetched_at" bson:"fetched_at"` // fetched from exchange at
 	CreatedAt time.Time `db:"created_at" json:"created_at" bson:"created_at"` // ready to be stored at
 
-	FetchDuration    int64         `db:"fetch_duration" json:"fetch_duration" bson:"fetch_duration"`
-	HandlingDuration time.Duration `db:"handling_duration" json:"handling_duration" bson:"handling_duration"`
+	FetchDuration    int64 `db:"fetch_duration" json:"fetch_duration" bson:"fetch_duration"`
+	HandlingDuration int64 `db:"handling_duration" json:"handling_duration" bson:"handling_duration"`
 
 	TickAvgBuyOpen float64 `db:"tick_avg_buy_open" json:"tick_avg_buy_open" bson:"tick_avg_buy_open"`
 	Tl1            int16   `db:"tl_1" json:"tl_1" bson:"tl_1"`       // 1s second total long liquidations
@@ -47,4 +48,62 @@ type TickAvg struct {
 type TickRepository interface {
 	Create(ctx context.Context, ts *Tick) error
 	GetHistorySince(ctx context.Context, since time.Time) ([]*Tick, error)
+}
+
+// CalculateIndicators calculates the indicators for the current tick
+// history includes the current tick data (e.g. history[len(history)-1] == t)
+func (t *Tick) CalculateIndicators(history []*Tick) {
+	if len(history) <= 1 {
+		return
+	}
+	prevTick := history[len(history)-2]
+
+	var totalSellDiff, totalBuyDiff, totalPd, totalPd20, totalMax10, totalMin10 float64
+	var count int16
+
+	for _, tickerCurrData := range t.Data {
+		tickerPrevData, ok := prevTick.Data[tickerCurrData.Symbol]
+		if !ok {
+			continue
+		}
+
+		sellDiff := math.Round((tickerCurrData.Bid-tickerPrevData.Bid)/tickerPrevData.Bid*100*100) / 100
+		buyDiff := math.Round((tickerCurrData.Ask-tickerPrevData.Ask)/tickerPrevData.Ask*100*100) / 100
+		if sellDiff > 1 {
+			sellDiff = 1
+		}
+		if sellDiff < -1 {
+			sellDiff = -1
+		}
+		if buyDiff > 1 {
+			buyDiff = 1
+		}
+		if buyDiff < -1 {
+			buyDiff = -1
+		}
+
+		totalSellDiff += sellDiff
+		totalBuyDiff += buyDiff
+		totalPd += tickerCurrData.Pd
+		totalPd20 += tickerCurrData.Pd20
+		totalMax10 += (tickerCurrData.Max10 - tickerCurrData.Ask) / tickerCurrData.Max10 * 100
+		totalMin10 += (tickerCurrData.Min10 - tickerCurrData.Ask) / tickerCurrData.Min10 * 100
+		count++
+	}
+
+	if len(history) >= 10 {
+		var totalTickAvgBuyOpen float64
+		for i := len(history) - 10; i < len(history); i++ {
+			totalTickAvgBuyOpen += history[i].Avg.BuyDiff
+		}
+		t.TickAvgBuyOpen = math.Round(totalTickAvgBuyOpen/10*1000000) / 1000000
+	}
+
+	t.Avg.SellDiff = math.Round(totalSellDiff/float64(count)*10000) / 10000
+	t.Avg.BuyDiff = math.Round(totalBuyDiff/float64(count)*10000) / 10000
+	t.Avg.PD = math.Round(totalPd/float64(count)*100) / 100
+	t.Avg.PD20 = math.Round(totalPd20/float64(count)*100) / 100
+	t.Avg.Max10 = math.Round(totalMax10/float64(count)*100) / 100
+	t.Avg.Min10 = math.Round(totalMin10/float64(count)*100) / 100
+	t.Avg.TickersCount = count
 }

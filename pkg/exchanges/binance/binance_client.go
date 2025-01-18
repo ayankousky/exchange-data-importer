@@ -90,6 +90,9 @@ func (bc *Client) FetchTickers(ctx context.Context) ([]exchanges.Ticker, error) 
 		if err != nil {
 			return nil, err
 		}
+		if askPrice == 0 || bidPrice == 0 {
+			continue
+		}
 		tickers = append(tickers, exchanges.Ticker{
 			Symbol:      bt.Symbol,
 			BidPrice:    bidPrice,

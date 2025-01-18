@@ -57,6 +57,7 @@ func (i *Importer) StartImport() error {
 		StartAt:       startAt,
 		FetchedAt:     fetchedAt,
 		FetchDuration: fetchedAt.Sub(startAt).Milliseconds(),
+		Avg:           &domain.TickAvg{},
 	}
 	data := make(map[domain.TickerName]*domain.Ticker, 0)
 	for _, ticker := range tickers {
@@ -75,10 +76,11 @@ func (i *Importer) StartImport() error {
 	tick.Data = data
 
 	i.addTickHistory(tick)
+	tick.CalculateIndicators(i.tickHistory)
 
 	// Store the tick in the database
 	tick.CreatedAt = time.Now()
-	tick.HandlingDuration = time.Since(fetchedAt)
+	tick.HandlingDuration = time.Since(fetchedAt).Milliseconds()
 	err = i.TickRepository.Create(context.Background(), tick)
 
 	if err != nil {
