@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"github.com/ayankousky/exchange-data-importer/internal/importer"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/db"
+	binance2 "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/binance"
 	"github.com/ayankousky/exchange-data-importer/internal/repository/mongo"
-	"github.com/ayankousky/exchange-data-importer/pkg/exchanges/binance"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,9 +16,9 @@ import (
 func main() {
 	fmt.Println("App started !!")
 
-	binanceClient := binance.NewBinance(binance.Config{
-		APIUrl:     binance.FuturesAPIURL,
-		WSUrl:      binance.FuturesWSUrl,
+	binanceClient := binance2.NewBinance(binance2.Config{
+		APIUrl:     binance2.FuturesAPIURL,
+		WSUrl:      binance2.FuturesWSUrl,
 		HTTPClient: http.DefaultClient,
 		Name:       "binance",
 	})

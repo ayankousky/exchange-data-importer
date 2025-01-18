@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
-	"github.com/ayankousky/exchange-data-importer/pkg/exchanges"
+	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges"
 	"time"
 )
 

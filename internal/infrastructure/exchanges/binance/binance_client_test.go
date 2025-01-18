@@ -2,7 +2,7 @@ package binance
 
 import (
 	"context"
-	"github.com/ayankousky/exchange-data-importer/pkg/exchanges"
+	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges"
 	"net/http"
 	"net/http/httptest"
 	"testing"

@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/ayankousky/exchange-data-importer/pkg/exchanges"
+	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges"
 	"net/http"
 	"strconv"
 )
