@@ -40,8 +40,8 @@ func NewImporter(exchange exchanges.Exchange, repositoryFactory RepositoryFactor
 	}
 }
 
-// StartImport imports tick data from the exchange (temporary method)
-func (i *Importer) StartImport() error {
+// importTickers fetches tickers from the exchange at the current moment
+func (i *Importer) importTickers() error {
 	startAt := time.Now()
 
 	tickers, err := i.exchange.FetchTickers(context.Background())
@@ -98,10 +98,10 @@ func (i *Importer) StartImportEverySecond() {
 		next := now.Truncate(time.Second).Add(time.Second)
 		time.Sleep(time.Until(next))
 
-		// Run StartImport
-		err := i.StartImport()
+		// Run importTickers
+		err := i.importTickers()
 		if err != nil {
-			fmt.Printf("Error in StartImport: %v\n", err)
+			fmt.Printf("Error in importTickers: %v\n", err)
 		}
 	}
 }
@@ -126,7 +126,7 @@ func (i *Importer) addTickerHistory(ticker *domain.Ticker) {
 	// Retrieve the last ticker data for this symbol, if it exists
 	var lastTickerData *domain.Ticker
 	if len(i.tickerHistory[ticker.Symbol]) > 0 {
-		lastTickerData = i.tickerHistory[ticker.Symbol][len(i.tickerHistory[ticker.Symbol])-1]
+		lastTickerData = i.getLastTicker(ticker.Symbol)
 	}
 
 	// If there is no data for this minute, create a new history item
@@ -166,6 +166,12 @@ func (i *Importer) getTickHistory() []*domain.Tick {
 }
 func (i *Importer) getTickerHistory(tickerName domain.TickerName) []*domain.Ticker {
 	return i.tickerHistory[tickerName]
+}
+func (i *Importer) getLastTicker(tickerName domain.TickerName) *domain.Ticker {
+	if len(i.tickerHistory[tickerName]) > 0 {
+		return i.tickerHistory[tickerName][len(i.tickerHistory[tickerName])-1]
+	}
+	return nil
 }
 func (i *Importer) getLastTick() *domain.Tick {
 	if len(i.tickHistory) > 0 {
