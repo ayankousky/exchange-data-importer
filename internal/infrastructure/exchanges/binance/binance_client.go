@@ -7,6 +7,7 @@ import (
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 // Config is a configuration for Binance client
@@ -90,15 +91,14 @@ func (bc *Client) FetchTickers(ctx context.Context) ([]exchanges.Ticker, error) 
 		if err != nil {
 			return nil, err
 		}
-		if askPrice == 0 || bidPrice == 0 {
-			continue
-		}
+		
 		tickers = append(tickers, exchanges.Ticker{
 			Symbol:      bt.Symbol,
 			BidPrice:    bidPrice,
 			AskPrice:    askPrice,
 			BidQuantity: bidQuantity,
 			AskQuantity: askQuantity,
+			EventDate:   time.Unix(0, bt.Time*int64(time.Millisecond)),
 		})
 	}
 

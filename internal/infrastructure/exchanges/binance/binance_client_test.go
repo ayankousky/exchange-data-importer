@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,13 +35,13 @@ func TestClient_FetchTickers(t *testing.T) {
 			name:               "valid response",
 			responseStatusCode: http.StatusOK,
 			responseBody: `[
-				{"symbol": "BTCUSDT", "bidPrice": "40000.0", "bidQty": "1.5", "askPrice": "40010.0", "askQty": "1.0", "time": 123456789, "lastUpdateId": 987654321},
-				{"symbol": "ETHUSDT", "bidPrice": "2500.0", "bidQty": "2.0", "askPrice": "2510.0", "askQty": "2.5", "time": 123456789, "lastUpdateId": 987654322}
+				{"symbol": "BTCUSDT", "bidPrice": "40000.0", "bidQty": "1.5", "askPrice": "40010.0", "askQty": "1.0", "time": 1735286548259, "lastUpdateId": 987654321},
+				{"symbol": "ETHUSDT", "bidPrice": "2500.0", "bidQty": "2.0", "askPrice": "2510.0", "askQty": "2.5", "time": 1735286548259, "lastUpdateId": 987654322}
 			]`,
 			expectedError: false,
 			expectedTickers: []exchanges.Ticker{
-				{Symbol: "BTCUSDT", BidPrice: 40000.0, AskPrice: 40010.0, BidQuantity: 1.5, AskQuantity: 1.0},
-				{Symbol: "ETHUSDT", BidPrice: 2500.0, AskPrice: 2510.0, BidQuantity: 2.0, AskQuantity: 2.5},
+				{Symbol: "BTCUSDT", BidPrice: 40000.0, AskPrice: 40010.0, BidQuantity: 1.5, AskQuantity: 1.0, EventDate: time.Unix(0, 1735286548259*int64(time.Millisecond))},
+				{Symbol: "ETHUSDT", BidPrice: 2500.0, AskPrice: 2510.0, BidQuantity: 2.0, AskQuantity: 2.5, EventDate: time.Unix(0, 1735286548259*int64(time.Millisecond))},
 			},
 		},
 		{

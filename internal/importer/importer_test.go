@@ -1,193 +1,106 @@
 package importer
 
 import (
-	"context"
-	"fmt"
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
-	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges"
+	domainMock "github.com/ayankousky/exchange-data-importer/internal/domain/mock"
+	exchangeMock "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/mock"
+	repoMock "github.com/ayankousky/exchange-data-importer/internal/repository/mock"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"testing"
 	"time"
 )
 
-// Mock implementations
-
-type MockExchange struct {
-	mock.Mock
-}
-
-func (m *MockExchange) FetchTickers(ctx context.Context) ([]exchanges.Ticker, error) {
-	args := m.Called(ctx)
-	return args.Get(0).([]exchanges.Ticker), args.Error(1)
-}
-
-func (m *MockExchange) GetName() string {
-	args := m.Called()
-	return args.String(0)
-}
-
-type MockTickRepository struct {
-	mock.Mock
-}
-
-func (m *MockTickRepository) Create(ctx context.Context, tick *domain.Tick) error {
-	args := m.Called(ctx, tick)
-	return args.Error(0)
-}
-
-func (m *MockTickRepository) GetHistorySince(ctx context.Context, since time.Time) ([]*domain.Tick, error) {
-	args := m.Called(ctx, since)
-	return args.Get(0).([]*domain.Tick), args.Error(1)
-}
-
-type MockLiquidationRepository struct {
-	mock.Mock
-}
-
-func (m *MockLiquidationRepository) Create(ctx context.Context, liquidation *domain.Liquidation) error {
-	args := m.Called(ctx, liquidation)
-	return args.Error(0)
-}
-
-type MockRepositoryFactory struct {
-	mock.Mock
-}
-
-func (m *MockRepositoryFactory) GetTickRepository(name string) domain.TickRepository {
-	args := m.Called(name)
-	return args.Get(0).(domain.TickRepository)
-}
-
-func (m *MockRepositoryFactory) GetLiquidationRepository(name string) domain.LiquidationRepository {
-	args := m.Called(name)
-	return args.Get(0).(domain.LiquidationRepository)
-}
-
 // Tests
 func TestStartImport(t *testing.T) {
-	exchange := new(MockExchange)
-	exchange.On("GetName").Return("mockExchange")
-	exchange.On("FetchTickers", mock.Anything).Return([]exchanges.Ticker{
-		{
-			Symbol:   "BTC",
-			AskPrice: 50000,
-			BidPrice: 49950,
-		},
-	}, nil)
-	tickRepository := new(MockTickRepository)
-	tickRepository.On("Create", mock.Anything, mock.Anything).Return(nil)
-	liquidationRepository := new(MockLiquidationRepository)
-	liquidationRepository.On("Create", mock.Anything, mock.Anything).Return(nil)
-	repoFactory := new(MockRepositoryFactory)
-	repoFactory.On("GetTickRepository", "mockExchange").Return(tickRepository)
-	repoFactory.On("GetLiquidationRepository", "mockExchange").Return(liquidationRepository)
+	repoFactoryMocked := repoMock.NewFactoryMock()
+	exchangeMocked := exchangeMock.NewMockClient("mockExchange")
+	importer := NewImporter(exchangeMocked, repoFactoryMocked)
 
-	imp := NewImporter(exchange, repoFactory)
+	tickers, err := importer.fetchTickers()
+	assert.Equal(t, 2, len(tickers))
+	assert.NoError(t, err)
 
-	err := imp.importTickers()
+	err = importer.importTickers()
 
 	assert.NoError(t, err)
-	exchange.AssertExpectations(t)
-	tickRepository.AssertExpectations(t)
 }
 
-func TestAddTickHistory(t *testing.T) {
-	imp := &Importer{
-		tickHistory: make([]*domain.Tick, 0),
-	}
+func TestTickerHistory(t *testing.T) {
+	testItemsCount := 1000
+	repoFactoryMocked := repoMock.NewFactoryMock()
+	exchangeMocked := exchangeMock.NewMockClient("mockExchange")
+	exchangeMocked.GenerateData(testItemsCount)
+	importer := NewImporter(exchangeMocked, repoFactoryMocked)
 
-	for i := 0; i < MaxTickHistory-5; i++ {
-		tick := &domain.Tick{ID: fmt.Sprintf("tick-%d", i)}
-		imp.addTickHistory(tick)
-	}
-	assert.Equal(t, MaxTickHistory-5, len(imp.getTickHistory()), "Every tick should be added to the history")
-
-	for i := 0; i < MaxTickHistory; i++ {
-		tick := &domain.Tick{ID: fmt.Sprintf("tick-%d", i)}
-		imp.addTickHistory(tick)
-	}
-	assert.Equal(t, MaxTickHistory, len(imp.getTickHistory()), "Tick history should be limited")
-}
-
-func TestAddTickerHistory(t *testing.T) {
-	imp := &Importer{
-		tickerHistory: make(map[domain.TickerName][]*domain.Ticker),
-	}
-
-	startDate := time.Now().Truncate(time.Hour)
-	for i := 0; i < 1100; i++ {
-		ticker := domain.Ticker{
-			Symbol: "BTC",
-			Ask:    50000,
-			Bid:    49950,
+	startDate := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < 1000; i++ {
+		ticker := &domain.Ticker{
+			Symbol: "BTCUSDT",
+			Ask:    50000 + float64(i),
+			Bid:    49950 + float64(i),
 			Date:   startDate.Add(time.Second * time.Duration(i)),
 		}
-		imp.addTickerHistory(&ticker)
+		importer.addTickerHistory(ticker)
 	}
-	assert.Equal(t, 19, len(imp.getTickerHistory("BTC")), "Only 1 ticker per minute should be stored")
+
+	lastTicker, _ := importer.getLastTicker("BTCUSDT")
+	tickerHistory := importer.getTickerHistory("BTCUSDT")
+	lastItem, _ := tickerHistory.Last()
+	assert.Equal(t, 17, tickerHistory.Len(), "Only 1 ticker per minute should be stored")
+	assert.Equal(t, 39, lastItem.Date.Second(), "Last inserted ticker should be at the 39th second")
+	assert.Equal(t, 39, lastTicker.Date.Second(), "getLastTicker should return the last inserted ticker")
+	assert.Equal(t, 59, tickerHistory.At(tickerHistory.Len()-2).Date.Second(), "Last second inserted ticker should be at the 39th second")
+	assert.Equal(t, 59, tickerHistory.At(tickerHistory.Len()-3).Date.Second(), "Last third inserted ticker should be at the 39th second")
 	for i := 0; i < (60+10)*MaxTickHistory; i++ {
-		ticker := domain.Ticker{
-			Symbol: "BTC",
-			Ask:    50000,
-			Bid:    49950,
+		ticker := &domain.Ticker{
+			Symbol: "BTCUSDT",
+			Ask:    50000 + float64(i),
+			Bid:    49950 + float64(i),
 			Date:   startDate.Add(time.Second * time.Duration(i)),
 		}
-		imp.addTickerHistory(&ticker)
+		importer.addTickerHistory(ticker)
 	}
-	assert.Equal(t, MaxTickHistory-1, len(imp.getTickerHistory("BTC")), "Ticker history should be limited")
-}
-
-func TestStartImportEverySecond(t *testing.T) {
-	// This test simulates the method behavior for a limited duration
-	// and verifies that importTickers is called in a loop.
-	exchange := new(MockExchange)
-	tickRepository := new(MockTickRepository)
-	liqudationRepository := new(MockLiquidationRepository)
-	repoFactory := new(MockRepositoryFactory)
-
-	exchange.On("GetName").Return("mockExchange")
-	repoFactory.On("GetTickRepository", "mockExchange").Return(tickRepository)
-	repoFactory.On("GetLiquidationRepository", "mockExchange").Return(liqudationRepository)
-	exchange.On("FetchTickers", mock.Anything).Return([]exchanges.Ticker{}, nil)
-	tickRepository.On("Create", mock.Anything, mock.Anything).Return(nil)
-	tickRepository.On("GetHistorySince", mock.Anything, mock.Anything).Return([]*domain.Tick{}, nil)
-
-	imp := NewImporter(exchange, repoFactory)
-
-	// Run the method in a goroutine for a short time
-	_, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	go func() {
-		imp.StartImportEverySecond()
-	}()
-
-	// Allow the loop to run a couple of iterations
-	time.Sleep(3 * time.Second)
-
-	// Cancel the loop
-	cancel()
-	exchange.AssertExpectations(t)
-	tickRepository.AssertExpectations(t)
+	assert.Equal(t, MaxTickHistory, importer.getTickerHistory("BTCUSDT").Len(), "Ticker history should be limited")
 }
 
 func TestCorruptedData(t *testing.T) {
-	imp := &Importer{
-		tickerHistory: make(map[domain.TickerName][]*domain.Ticker),
-	}
+	repoFactoryMocked := repoMock.NewFactoryMock()
+	exchangeMocked := exchangeMock.NewMockClient("mockExchange")
+	importer := NewImporter(exchangeMocked, repoFactoryMocked)
 
 	startDate := time.Now().Truncate(time.Hour)
 	for i := 0; i < 1500; i++ {
-		ticker := domain.Ticker{
-			Symbol: "BTC",
+		ticker := &domain.Ticker{
+			Symbol: "BTCUSDT",
 			Ask:    50000,
 			Bid:    49950,
-			Date:   startDate.Add(time.Second * time.Duration(i)),
+			Date:   startDate.Add(time.Second),
 		}
-		imp.addTickerHistory(&ticker)
+		importer.addTickerHistory(ticker)
 	}
 
-	history := imp.getTickerHistory("BTC")
-	assert.Equal(t, 24, len(history))
+	history := importer.getTickerHistory("BTCUSDT")
+	assert.Equal(t, 1, history.Len(), "Only 1 ticker per minute should be stored")
+}
+
+func TestInitHistory(t *testing.T) {
+	repoFactoryMocked := repoMock.NewFactoryMock()
+	exchangeMocked := exchangeMock.NewMockClient("mockExchange")
+	importer := NewImporter(exchangeMocked, repoFactoryMocked)
+
+	for _, tick := range domainMock.GenerateTicks(1000) {
+		importer.tickRepository.Create(nil, tick)
+	}
+
+	importer.initHistory()
+	assert.Equal(t, MaxTickHistory, importer.tickHistory.Len())
+	assert.Equal(t, 17, importer.getTickerHistory("BTCUSDT").Len())
+	lastTick, exists := importer.tickHistory.Last()
+	btcHistory := importer.getTickerHistory("BTCUSDT")
+	assert.True(t, exists)
+	assert.Equal(t, 625810.2565, lastTick.Data["BTCUSDT"].Ask)
+	assert.Equal(t, 625810.2565, btcHistory.At(btcHistory.Len()-1).Ask)
+	assert.Equal(t, 604932.5165, btcHistory.At(btcHistory.Len()-2).Ask)
+	assert.Equal(t, 573615.9065, btcHistory.At(btcHistory.Len()-3).Ask)
+	assert.Equal(t, lastTick.Data["BTCUSDT"].Ask, btcHistory.At(btcHistory.Len()-1).Ask)
 }

@@ -17,7 +17,7 @@ type Tick struct {
 }
 
 // Create method stores a tick snapshot in the database
-func (r *Tick) Create(ctx context.Context, tick *domain.Tick) error {
+func (r *Tick) Create(ctx context.Context, tick domain.Tick) error {
 	_, err := r.db.InsertOne(ctx, tick)
 	if err != nil {
 		log.Default().Printf("Error inserting tick snapshot: %v", err)
@@ -28,7 +28,7 @@ func (r *Tick) Create(ctx context.Context, tick *domain.Tick) error {
 }
 
 // GetHistorySince method returns a list of tick snapshots since the specified time
-func (r *Tick) GetHistorySince(ctx context.Context, since time.Time) ([]*domain.Tick, error) {
+func (r *Tick) GetHistorySince(ctx context.Context, since time.Time) ([]domain.Tick, error) {
 	filter := map[string]interface{}{
 		"created_at": map[string]interface{}{
 			"$gte": since,
@@ -43,13 +43,13 @@ func (r *Tick) GetHistorySince(ctx context.Context, since time.Time) ([]*domain.
 	}
 	defer cursor.Close(ctx)
 
-	var history []*domain.Tick
+	var history []domain.Tick
 	for cursor.Next(ctx) {
 		var tick domain.Tick
 		if err := cursor.Decode(&tick); err != nil {
 			return nil, err
 		}
-		history = append(history, &tick)
+		history = append(history, tick)
 	}
 
 	return history, nil

@@ -13,7 +13,7 @@ type Liquidation struct {
 }
 
 // Create method stores a liquidation in the database
-func (r *Liquidation) Create(ctx context.Context, liquidation *domain.Liquidation) error {
+func (r *Liquidation) Create(ctx context.Context, liquidation domain.Liquidation) error {
 	_, err := r.db.InsertOne(ctx, liquidation)
 	if err != nil {
 		log.Default().Printf("Error inserting tick snapshot: %v", err)

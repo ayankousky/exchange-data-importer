@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"github.com/ayankousky/exchange-data-importer/pkg/utils"
 	"github.com/ayankousky/exchange-data-importer/pkg/utils/mathutils"
 	"time"
 )
@@ -10,13 +11,12 @@ import (
 // It includes average metrics, liquidation counts,and a map of Ticker data keyed by a TickerName
 // This item is stored in the database
 type Tick struct {
-	ID        string    `db:"_id" json:"_id" bson:"_id"`
 	StartAt   time.Time `db:"start_at" json:"start_at" bson:"start_at"`       // handling start at
 	FetchedAt time.Time `db:"fetched_at" json:"fetched_at" bson:"fetched_at"` // fetched from exchange at
 	CreatedAt time.Time `db:"created_at" json:"created_at" bson:"created_at"` // ready to be stored at
 
-	FetchDuration    int64 `db:"fetch_duration" json:"fetch_duration" bson:"fetch_duration"`
-	HandlingDuration int64 `db:"handling_duration" json:"handling_duration" bson:"handling_duration"`
+	FetchDuration    int64         `db:"fetch_duration" json:"fetch_duration" bson:"fetch_duration"`
+	HandlingDuration time.Duration `db:"handling_duration" json:"handling_duration" bson:"handling_duration"`
 
 	AvgBuy10 float64 `db:"tick_avg_buy_open" json:"tick_avg_buy_open" bson:"tick_avg_buy_open"`
 	Tl1      int16   `db:"tl_1" json:"tl_1" bson:"tl_1"`       // 1s second total long liquidations
@@ -28,7 +28,7 @@ type Tick struct {
 	Btsl     int16   `db:"btsl" json:"btsl" bson:"btsl"`       // 1s bitcoin total short liquidations
 	Lmltc    int32   `db:"lmltc" json:"lmltc" bson:"lmltc"`    // last minute total long liquidations count
 
-	Avg *TickAvg `db:"avg" json:"avg" bson:"avg"`
+	Avg TickAvg `db:"avg" json:"avg" bson:"avg"`
 	// store data as map to be able to query by ticker name or project the data
 	Data map[TickerName]*Ticker `db:"data" json:"data" bson:"data"`
 }
@@ -46,23 +46,22 @@ type TickAvg struct {
 
 // TickRepository represents the tick snapshot repository contract
 type TickRepository interface {
-	Create(ctx context.Context, ts *Tick) error
-	GetHistorySince(ctx context.Context, since time.Time) ([]*Tick, error)
+	Create(ctx context.Context, ts Tick) error
+	GetHistorySince(ctx context.Context, since time.Time) ([]Tick, error)
 }
 
 // CalculateIndicators calculates the indicators for the current tick
-// history includes the current tick data (e.g. history[len(history)-1] == t)
-func (t *Tick) CalculateIndicators(history []*Tick) {
-	if len(history) <= 1 {
+func (t *Tick) CalculateIndicators(history *utils.RingBuffer[*Tick]) {
+	if history.Len() <= 1 {
 		return
 	}
-	prevTick := history[len(history)-2]
+	prevTick := history.At(history.Len() - 2)
 
 	// If we have at least 10 ticks, compute an average Buy price for the last 10
-	if len(history) >= 10 {
+	if history.Len() >= 10 {
 		var sumTickAvgBuyOpen float64
-		for i := len(history) - 10; i < len(history); i++ {
-			sumTickAvgBuyOpen += history[i].Avg.BuyDiff
+		for i := history.Len() - 10; i < history.Len(); i++ {
+			sumTickAvgBuyOpen += history.At(i).Avg.BuyDiff
 		}
 		t.AvgBuy10 = mathutils.Round(sumTickAvgBuyOpen/10, 6)
 	}
@@ -96,4 +95,9 @@ func (t *Tick) CalculateIndicators(history []*Tick) {
 		t.Avg.Min10 = mathutils.Round(sumMin10/count, 2)
 		t.Avg.TickersCount = int16(count)
 	}
+}
+
+// SetTicker sets a ticker in the tick snapshot
+func (t *Tick) SetTicker(ticker *Ticker) {
+	t.Data[ticker.Symbol] = ticker
 }

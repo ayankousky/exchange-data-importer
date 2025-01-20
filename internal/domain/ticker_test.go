@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"github.com/ayankousky/exchange-data-importer/pkg/utils"
 	"github.com/ayankousky/exchange-data-importer/pkg/utils/mathutils"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -9,24 +10,24 @@ import (
 func TestTicker_CalculateIndicators(t *testing.T) {
 	// Prepare test data
 	historySize := 32
-	history := make([]*Ticker, historySize)
+	history := utils.NewRingBuffer[*Ticker](historySize)
 	for i := 0; i < historySize; i++ {
-		history[i] = &Ticker{
-			Symbol: "BTC",
+		history.Push(&Ticker{
+			Symbol: "BTCUSDT",
 			Ask:    mathutils.Round(100*float64(i), 2),
 			Bid:    mathutils.Round(99*float64(i), 2),
 			Pd:     mathutils.Round(0.1*float64(i), 2),
 			Pd20:   mathutils.Round(0.2*float64(i), 2),
 			Max10:  mathutils.Round(101*float64(i), 2),
 			Min10:  mathutils.Round(98*float64(i), 2),
-		}
+		})
 	}
 
 	// Execute CalculateIndicators
-	ticker := history[historySize-1]
+	ticker, _ := history.Last()
 	prevTick := &Tick{Data: map[TickerName]*Ticker{
-		"BTC": {
-			Symbol: "BTC",
+		"BTCUSDT": {
+			Symbol: "BTCUSDT",
 			Ask:    mathutils.Round(ticker.Ask*0.99, 4),
 			Bid:    mathutils.Round(ticker.Bid*0.99, 4),
 			Pd:     mathutils.Round(ticker.Pd*0.99, 4),
