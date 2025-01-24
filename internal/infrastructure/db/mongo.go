@@ -2,31 +2,30 @@ package db
 
 import (
 	"context"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"fmt"
 	"log"
 	"time"
+
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// NewMongoClient returns a new MongoDB client
+// NewMongoClient creates a new MongoDB client
 func NewMongoClient(uri string) (*mongo.Client, error) {
-	// Set client options
 	clientOptions := options.Client().ApplyURI(uri)
 
-	// Set a timeout context
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	// Connect to MongoDB
 	client, err := mongo.Connect(ctx, clientOptions)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("mongo.Connect failed: %w", err)
 	}
 
 	// Verify the connection
-	err = client.Ping(ctx, nil)
-	if err != nil {
-		return nil, err
+	if err := client.Ping(ctx, nil); err != nil {
+		return nil, fmt.Errorf("mongo.Ping failed: %w", err)
 	}
 
 	log.Println("Connected to MongoDB")

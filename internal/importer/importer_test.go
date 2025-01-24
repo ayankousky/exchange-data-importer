@@ -1,6 +1,7 @@
 package importer
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -13,15 +14,16 @@ import (
 
 // Tests
 func TestStartImport(t *testing.T) {
+	ctx := context.Background()
 	repoFactoryMocked := repoMock.NewFactoryMock()
 	exchangeMocked := exchangeMock.NewMockClient("mockExchange")
 	importer := NewImporter(exchangeMocked, repoFactoryMocked)
 
-	tickers, err := importer.fetchTickers()
+	tickers, err := importer.fetchTickers(ctx)
 	assert.Equal(t, 2, len(tickers))
 	assert.NoError(t, err)
 
-	err = importer.importTick()
+	err = importer.importTick(ctx)
 
 	assert.NoError(t, err)
 }
@@ -85,6 +87,7 @@ func TestCorruptedData(t *testing.T) {
 }
 
 func TestInitHistory(t *testing.T) {
+	ctx := context.Background()
 	repoFactoryMocked := repoMock.NewFactoryMock()
 	exchangeMocked := exchangeMock.NewMockClient("mockExchange")
 	importer := NewImporter(exchangeMocked, repoFactoryMocked)
@@ -93,7 +96,7 @@ func TestInitHistory(t *testing.T) {
 		importer.tickRepository.Create(nil, tick)
 	}
 
-	importer.initHistory()
+	importer.initHistory(ctx)
 	assert.Equal(t, domain.MaxTickHistory, importer.tickHistory.Len())
 	assert.Equal(t, 17, importer.getTickerHistory("BTCUSDT").Len())
 	lastTick, exists := importer.tickHistory.Last()

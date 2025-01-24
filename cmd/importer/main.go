@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,16 +11,19 @@ import (
 
 	"github.com/ayankousky/exchange-data-importer/internal/importer"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/db"
-	binance2 "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/binance"
+	binanceExchange "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/binance"
 	"github.com/ayankousky/exchange-data-importer/internal/repository/mongo"
 )
 
 func main() {
-	fmt.Println("App started !!")
+	log.Printf("Starting importer...")
 
-	binanceClient := binance2.NewBinance(binance2.Config{
-		APIUrl:     binance2.FuturesAPIURL,
-		WSUrl:      binance2.FuturesWSUrl,
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	binanceClient := binanceExchange.NewBinance(binanceExchange.Config{
+		APIUrl:     binanceExchange.FuturesAPIURL,
+		WSUrl:      binanceExchange.FuturesWSUrl,
 		HTTPClient: http.DefaultClient,
 		Name:       "binance",
 	})
@@ -28,15 +31,21 @@ func main() {
 	// Create a new mongo client
 	mongoClient, err := db.NewMongoClient("mongodb://beatbet-db-mongo:27017")
 	if err != nil {
-		fmt.Println(err)
+		log.Printf("Error creating mongo client: %v", err)
+		return
 	}
 
-	mongoFactory, _ := mongo.NewMongoRepoFactory(mongoClient)
+	mongoFactory, err := mongo.NewMongoRepoFactory(mongoClient)
+	if err != nil {
+		log.Printf("Error creating mongo factory: %v", err)
+		return
+	}
 
 	binanceImporter := importer.NewImporter(binanceClient, mongoFactory)
-	binanceImporter.StartImportLoop(time.Second)
+	if err := binanceImporter.StartImportLoop(ctx, time.Second); err != nil {
+		log.Printf("Error starting import loop: %v", err)
+		return
+	}
 
-	_, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	fmt.Println("Exiting...")
+	log.Printf("Exiting...")
 }

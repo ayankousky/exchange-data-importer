@@ -42,7 +42,7 @@ type Ticker struct {
 // each history item is a minute of data
 func (t *Ticker) CalculateIndicators(history *utils.RingBuffer[*Ticker], lastTick *Tick) {
 	// Safety checks
-	if t == nil || lastTick.Data == nil {
+	if t == nil || lastTick == nil || lastTick.Data == nil {
 		return
 	}
 	prevTicker, ok := lastTick.Data[t.Symbol]

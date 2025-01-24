@@ -2,7 +2,8 @@ package mongo
 
 import (
 	"context"
-	"fmt"
+	"log"
+
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -26,7 +27,7 @@ func (f *Factory) GetTickRepository(name string) domain.TickRepository {
 		Keys: map[string]interface{}{"created_at": 1},
 	})
 	if err != nil {
-		fmt.Println(err)
+		log.Printf("Error creating index: %v", err)
 	}
 
 	return &Tick{db: db}

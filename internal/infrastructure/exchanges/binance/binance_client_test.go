@@ -56,8 +56,8 @@ func TestClient_FetchTickers(t *testing.T) {
 			name:               "malformed JSON",
 			responseStatusCode: http.StatusOK,
 			responseBody:       "[{\"symbol\": \"BTCUSDT\", \"bidPrice\": \"not-a-number\"}]",
-			expectedError:      true,
-			expectedTickers:    nil,
+			expectedError:      false,
+			expectedTickers:    []exchanges.Ticker{},
 		},
 	}
 

@@ -3,6 +3,7 @@ package importer
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
@@ -11,7 +12,6 @@ import (
 )
 
 // RepositoryFactory is a contract for creating repositories
-// each exchange must have its own separate repository
 type RepositoryFactory interface {
 	GetTickRepository(name string) domain.TickRepository
 	GetLiquidationRepository(name string) domain.LiquidationRepository
@@ -39,37 +39,59 @@ func NewImporter(exchange exchanges.Exchange, repositoryFactory RepositoryFactor
 	}
 }
 
-// StartImportLoop starts a loop that imports data from the exchange every second
-// This simulates a real-time import process and stores the results in the database.
-func (i *Importer) StartImportLoop(interval time.Duration) {
+// StartImportLoop starts a loop that imports data from the exchange periodically.
+func (i *Importer) StartImportLoop(ctx context.Context, interval time.Duration) error {
 	// Initialize the history data for calculating tick indicators
-	i.initHistory()
+	if err := i.initHistory(ctx); err != nil {
+		return fmt.Errorf("failed to init history: %w", err)
+	}
 
-	// Import should be started exactly at the beginning of each second
+	// Import should be started exactly at the beginning of the next second
 	now := time.Now()
 	nextSecond := now.Truncate(time.Second).Add(time.Second)
-	time.Sleep(nextSecond.Sub(now))
-	fmt.Println("Starting import loop at", time.Now())
+	time.Sleep(time.Until(nextSecond))
 
 	// Start the import loop with the specified interval
 	timeTicker := time.NewTicker(interval)
 	defer timeTicker.Stop()
 	for {
-		<-timeTicker.C
-		err := i.importTick()
-		if err != nil {
-			fmt.Println(time.Now())
+		select {
+		case <-ctx.Done():
+			log.Println("Context canceled, stopping import loop...")
+			return ctx.Err()
+		case <-timeTicker.C:
+			// Attempt to import a single "tick" of data
+			if err := i.importTick(ctx); err != nil {
+				log.Printf("Error importing tick (continuing loop): %v", err)
+			}
 		}
 	}
 }
 
-func (i *Importer) importTick() error {
-	startAt := time.Now()
-	// Fetch tickers from the exchange
-	fetchedTickers, err := i.fetchTickers()
+// initHistory loads old data from repositories and populates ring buffers
+func (i *Importer) initHistory(ctx context.Context) error {
+	history, err := i.tickRepository.GetHistorySince(ctx, time.Now().Add(-domain.MaxTickHistory*time.Minute))
 	if err != nil {
-		fmt.Printf("Error fetching tickers: %v\n", err)
-		return err
+		return fmt.Errorf("GetHistorySince failed: %w", err)
+	}
+
+	for _, tick := range history {
+		i.addTickHistory(&tick)
+		for _, ticker := range tick.Data {
+			i.addTickerHistory(ticker)
+		}
+	}
+
+	return nil
+}
+
+func (i *Importer) importTick(ctx context.Context) error {
+	startAt := time.Now()
+
+	// Fetch tickers from the exchange
+	fetchedTickers, err := i.fetchTickers(ctx)
+	if err != nil {
+		return fmt.Errorf("fetchTickers failed: %w", err)
 	}
 	fetchedAt := time.Now()
 
@@ -79,29 +101,33 @@ func (i *Importer) importTick() error {
 		FetchedAt:     fetchedAt,
 		FetchDuration: fetchedAt.Sub(startAt).Milliseconds(),
 		Avg:           domain.TickAvg{},
-		Data:          make(map[domain.TickerName]*domain.Ticker, 0),
+		Data:          make(map[domain.TickerName]*domain.Ticker),
 	}
-	err = i.buildTick(newTick, fetchedTickers)
-	if err != nil {
-		fmt.Printf("Error building tick: %v\n", err)
-		return err
-	}
+
+	// Build the tick using the fetched data
+	i.buildTick(newTick, fetchedTickers)
 	newTick.CreatedAt = time.Now()
 	newTick.HandlingDuration = time.Since(newTick.FetchedAt)
 
 	// Store the tick in the database
-	err = i.tickRepository.Create(context.Background(), *newTick)
-	if err != nil {
-		fmt.Printf("Error storing tick: %v\n", err)
+	if err := i.tickRepository.Create(ctx, *newTick); err != nil {
+		return fmt.Errorf("failed to store tick in DB: %w", err)
 	}
+
 	return nil
 }
-func (i *Importer) fetchTickers() ([]exchanges.Ticker, error) {
-	return i.exchange.FetchTickers(context.Background())
+
+// fetchTickers is a simple wrapper that calls exchange.FetchTickers
+func (i *Importer) fetchTickers(ctx context.Context) ([]exchanges.Ticker, error) {
+	return i.exchange.FetchTickers(ctx)
 }
-func (i *Importer) buildTick(tick *domain.Tick, eTickers []exchanges.Ticker) error {
+
+// buildTick calculates any indicators and populates domain.Tick
+// this should never fail, we must always have valid data
+func (i *Importer) buildTick(tick *domain.Tick, eTickers []exchanges.Ticker) {
 	lastTick, _ := i.tickHistory.Last()
-	// calculate tickers indicators
+
+	// Calculate tickers indicators
 	for _, eTicker := range eTickers {
 		ticker := &domain.Ticker{
 			Symbol:    domain.TickerName(eTicker.Symbol),
@@ -112,36 +138,30 @@ func (i *Importer) buildTick(tick *domain.Tick, eTickers []exchanges.Ticker) err
 		}
 
 		if !ticker.IsValid() {
+			// Skipping invalid ticker. Not necessarily an error.
 			continue
 		}
 
 		i.addTickerHistory(ticker)
-		if lastTick != nil {
-			ticker.CalculateIndicators(i.getTickerHistory(ticker.Symbol), lastTick)
-		}
+		ticker.CalculateIndicators(i.getTickerHistory(ticker.Symbol), lastTick)
 		tick.SetTicker(ticker)
 	}
 
-	// calculate the tick indicators
+	// Calculate the tick indicators
 	i.addTickHistory(tick)
 	tick.CalculateIndicators(i.tickHistory)
-
-	return nil
 }
 
 func (i *Importer) addTickHistory(tick *domain.Tick) {
 	i.tickHistory.Push(tick)
 }
 
-// history is a map of TickerName to a list of Ticker data for that symbol
-// 1 item = 1 minute of data (no need to store for each second)
+// addTickerHistory updates the ring buffer for a particular ticker - 1 item per 1 minute
 func (i *Importer) addTickerHistory(ticker *domain.Ticker) {
-
 	history := i.getTickerHistory(ticker.Symbol)
 
-	// Retrieve the last ticker data for this symbol, if it exists
 	lastTickerData, err := i.getLastTicker(ticker.Symbol)
-	// If there is no data for this minute, create a new history item
+	// If there’s no data for this minute, push a new item
 	if err != nil || !lastTickerData.CreatedAt.Truncate(time.Minute).Equal(ticker.CreatedAt.Truncate(time.Minute)) {
 		ticker.Max = ticker.Ask
 		ticker.Min = ticker.Ask
@@ -149,7 +169,7 @@ func (i *Importer) addTickerHistory(ticker *domain.Ticker) {
 		return
 	}
 
-	// Update the existing lastTickerData directly
+	// Update the existing lastTickerData
 	if ticker.Ask > lastTickerData.Max {
 		lastTickerData.Max = ticker.Ask
 	}
@@ -160,18 +180,9 @@ func (i *Importer) addTickerHistory(ticker *domain.Ticker) {
 	lastTickerData.Bid = ticker.Bid
 	lastTickerData.CreatedAt = ticker.CreatedAt
 
+	// mirror these changes in the newly pushed ticker object
 	ticker.Max = lastTickerData.Max
 	ticker.Min = lastTickerData.Min
-}
-
-func (i *Importer) initHistory() {
-	history, _ := i.tickRepository.GetHistorySince(context.Background(), time.Now().Add(-domain.MaxTickHistory*time.Minute))
-	for _, tick := range history {
-		i.addTickHistory(&tick)
-		for _, ticker := range tick.Data {
-			i.addTickerHistory(ticker)
-		}
-	}
 }
 
 func (i *Importer) getTickerHistory(tickerName domain.TickerName) *utils.RingBuffer[*domain.Ticker] {
@@ -182,6 +193,7 @@ func (i *Importer) getTickerHistory(tickerName domain.TickerName) *utils.RingBuf
 	}
 	return history
 }
+
 func (i *Importer) getLastTicker(tickerName domain.TickerName) (*domain.Ticker, error) {
 	history := i.getTickerHistory(tickerName)
 	lastTicker, exists := history.Last()

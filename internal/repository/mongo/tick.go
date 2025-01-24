@@ -3,12 +3,13 @@ package mongo
 import (
 	"context"
 	"fmt"
+	"log"
+	"time"
+
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"log"
-	"time"
 )
 
 // Tick is a repository for storing tick snapshots
@@ -38,8 +39,7 @@ func (r *Tick) GetHistorySince(ctx context.Context, since time.Time) ([]domain.T
 
 	cursor, err := r.db.Find(ctx, filter, findOptions)
 	if err != nil {
-		fmt.Println(err)
-		return nil, err
+		return nil, fmt.Errorf("error finding tick snapshots: %w", err)
 	}
 	defer cursor.Close(ctx)
 
@@ -47,7 +47,7 @@ func (r *Tick) GetHistorySince(ctx context.Context, since time.Time) ([]domain.T
 	for cursor.Next(ctx) {
 		var tick domain.Tick
 		if err := cursor.Decode(&tick); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error decoding tick snapshot: %w", err)
 		}
 		history = append(history, tick)
 	}

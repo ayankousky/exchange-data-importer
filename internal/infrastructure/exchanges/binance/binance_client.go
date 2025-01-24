@@ -3,7 +3,8 @@ package binance
 import (
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -48,17 +49,17 @@ func (bc *Client) FetchTickers(ctx context.Context) ([]exchanges.Ticker, error) 
 	url := bc.httpURL + FetchTickersData
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not build request for %s: %w", url, err)
 	}
 
 	resp, err := bc.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("httpClient.Do failed for %s: %w", url, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("unexpected status code %d" + resp.Status)
+		return nil, fmt.Errorf("unexpected status code %d: %s", resp.StatusCode, resp.Status)
 	}
 
 	var binanceTickers []struct {
@@ -71,26 +72,30 @@ func (bc *Client) FetchTickers(ctx context.Context) ([]exchanges.Ticker, error) 
 		LastUpdated int64  `json:"lastUpdateId"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&binanceTickers); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decoding response from %s failed: %w", url, err)
 	}
 
 	tickers := make([]exchanges.Ticker, 0, len(binanceTickers))
 	for _, bt := range binanceTickers {
 		bidPrice, err := strconv.ParseFloat(bt.BidPrice, 64)
 		if err != nil {
-			return nil, err
+			log.Printf("invalid bidPrice '%s': %v", bt.BidPrice, err)
+			continue
 		}
 		askPrice, err := strconv.ParseFloat(bt.AskPrice, 64)
 		if err != nil {
-			return nil, err
+			log.Printf("invalid askPrice '%s': %v", bt.AskPrice, err)
+			continue
 		}
 		bidQuantity, err := strconv.ParseFloat(bt.BidQuantity, 64)
 		if err != nil {
-			return nil, err
+			log.Printf("invalid bidQuantity '%s': %v", bt.BidQuantity, err)
+			continue
 		}
 		askQuantity, err := strconv.ParseFloat(bt.AskQuantity, 64)
 		if err != nil {
-			return nil, err
+			log.Printf("invalid askQuantity '%s': %v", bt.AskQuantity, err)
+			continue
 		}
 
 		tickers = append(tickers, exchanges.Ticker{
