@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges"
 )
 
 // Config is a configuration for Binance client
@@ -91,14 +92,14 @@ func (bc *Client) FetchTickers(ctx context.Context) ([]exchanges.Ticker, error) 
 		if err != nil {
 			return nil, err
 		}
-		
+
 		tickers = append(tickers, exchanges.Ticker{
 			Symbol:      bt.Symbol,
 			BidPrice:    bidPrice,
 			AskPrice:    askPrice,
 			BidQuantity: bidQuantity,
 			AskQuantity: askQuantity,
-			EventDate:   time.Unix(0, bt.Time*int64(time.Millisecond)),
+			EventAt:     time.Unix(0, bt.Time*int64(time.Millisecond)),
 		})
 	}
 

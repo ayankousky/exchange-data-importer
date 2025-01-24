@@ -3,10 +3,11 @@ package importer
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges"
 	"github.com/ayankousky/exchange-data-importer/pkg/utils"
-	"time"
 )
 
 // MaxTickHistory is the maximum number of tick snapshots to keep in memory
@@ -85,8 +86,8 @@ func (i *Importer) buildTick(tick *domain.Tick, eTickers []exchanges.Ticker) err
 			Symbol:    domain.TickerName(eTicker.Symbol),
 			Ask:       eTicker.AskPrice,
 			Bid:       eTicker.BidPrice,
-			EventDate: eTicker.EventDate,
-			Date:      tick.StartAt,
+			EventAt:   eTicker.EventAt,
+			CreatedAt: tick.StartAt,
 		}
 
 		if !ticker.IsValid() {
@@ -119,7 +120,7 @@ func (i *Importer) StartImportEverySecond() {
 
 		err := i.importTickers()
 		if err != nil {
-			fmt.Printf("Error in importTickers: %v\n", err)
+			fmt.Println(now)
 		}
 	}
 }
@@ -137,7 +138,7 @@ func (i *Importer) addTickerHistory(ticker *domain.Ticker) {
 	// Retrieve the last ticker data for this symbol, if it exists
 	lastTickerData, err := i.getLastTicker(ticker.Symbol)
 	// If there is no data for this minute, create a new history item
-	if err != nil || !lastTickerData.Date.Truncate(time.Minute).Equal(ticker.Date.Truncate(time.Minute)) {
+	if err != nil || !lastTickerData.CreatedAt.Truncate(time.Minute).Equal(ticker.CreatedAt.Truncate(time.Minute)) {
 		ticker.Max = ticker.Ask
 		ticker.Min = ticker.Ask
 		history.Push(ticker)
@@ -153,7 +154,7 @@ func (i *Importer) addTickerHistory(ticker *domain.Ticker) {
 	}
 	lastTickerData.Ask = ticker.Ask
 	lastTickerData.Bid = ticker.Bid
-	lastTickerData.Date = ticker.Date
+	lastTickerData.CreatedAt = ticker.CreatedAt
 
 	ticker.Max = lastTickerData.Max
 	ticker.Min = lastTickerData.Min

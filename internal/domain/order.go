@@ -14,7 +14,7 @@ const (
 
 // Order represents any order in the system
 type Order struct {
-	Date       time.Time  `db:"tt" json:"tt" bson:"tt"`
+	EventAt    time.Time  `db:"et" json:"et" bson:"et"`
 	Symbol     TickerName `db:"s" json:"s" bson:"s"`
 	Side       OrderSide  `db:"sd" json:"sd" bson:"sd" validate:"required,oneof=BUY SELL"`
 	Price      float64    `db:"p" json:"p" bson:"p"`

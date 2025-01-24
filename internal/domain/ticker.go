@@ -1,29 +1,32 @@
 package domain
 
 import (
+	"math"
+	"time"
+
 	"github.com/ayankousky/exchange-data-importer/pkg/utils"
 	"github.com/ayankousky/exchange-data-importer/pkg/utils/mathutils"
 	"github.com/ayankousky/exchange-data-importer/pkg/utils/tradeutils"
-	"math"
-	"time"
 )
 
 // TickerName represents a market symbol
 type TickerName string
 
 // Ticker represents a market symbol's snapshot at a given time
-// Use short names to save space in the database
+// Use short names to save space in the database but readable enough for human
 type Ticker struct {
-	Symbol    TickerName `db:"s" json:"s" bson:"s"`          // symbol
-	EventDate time.Time  `db:"ed" json:"ed" bson:"ed"`       // date when event happened on the exchange
-	Date      time.Time  `db:"date" json:"date" bson:"date"` // date when data was created in the system
+	Symbol    TickerName `db:"s" json:"s" bson:"s"`    // symbol
+	EventAt   time.Time  `db:"et" json:"et" bson:"et"` // date when event happened on the exchange
+	CreatedAt time.Time  `db:"ct" json:"ct" bson:"ct"` // date when data was created in the system
 	Ask       float64    `db:"ask" json:"ask" bson:"ask"`
 	Bid       float64    `db:"bid" json:"bid" bson:"bid"`
-	Rsi20     float64    `db:"rsi_20" json:"rsi_20" bson:"rsi_20"`
-	BuyPd     float64    `db:"tb_pd" json:"tb_pd" bson:"tb_pd"` // % diff: prev vs curr ask
-	SellPd    float64    `db:"ts_pd" json:"ts_pd" bson:"ts_pd"` // % diff: prev vs curr bid
-	Pd        float64    `db:"pd" json:"pd" bson:"pd"`          // % change since last minute
-	Pd20      float64    `db:"pd_20" json:"pd_20" bson:"pd_20"` // % change since last 20 minutes
+	RSI20     float64    `db:"rsi_20" json:"rsi_20" bson:"rsi_20"`
+	AskChange float64    `db:"a_pd" json:"a_pd" bson:"a_pd"` // % diff: prev vs curr ask
+	BidChange float64    `db:"b_pd" json:"b_pd" bson:"b_pd"` // % diff: prev vs curr bid
+
+	// % change since last minute, last 20 minutes
+	Change1m  float64 `db:"pd" json:"pd" bson:"pd"`
+	Change20m float64 `db:"pd_20" json:"pd_20" bson:"pd_20"`
 
 	// Max / Min => 1-minute rolling extremes
 	// Max10 / Min10 => 10-minute rolling extremes
@@ -53,7 +56,7 @@ func (t *Ticker) CalculateIndicators(history *utils.RingBuffer[*Ticker], lastTic
 	}
 
 	if historyLength > 10 {
-		t.Pd = mathutils.PercDiff(t.Bid, history.At(historyLength-2).Bid, 2)
+		t.Change1m = mathutils.PercDiff(t.Bid, history.At(historyLength-2).Bid, 2)
 
 		// Evaluate the last 10 Tickers for max/min
 		min10, max10 := math.MaxFloat64, -1*math.MaxFloat64
@@ -71,18 +74,18 @@ func (t *Ticker) CalculateIndicators(history *utils.RingBuffer[*Ticker], lastTic
 		t.Max10Diff = mathutils.PercDiff(t.Ask, t.Max10, 2)
 		t.Min10Diff = mathutils.PercDiff(t.Ask, t.Min10, 2)
 
-		t.BuyPd = mathutils.PercDiff(t.Ask, prevTicker.Ask, 2)
-		t.SellPd = mathutils.PercDiff(t.Bid, prevTicker.Bid, 2)
+		t.AskChange = mathutils.PercDiff(t.Ask, prevTicker.Ask, 2)
+		t.BidChange = mathutils.PercDiff(t.Bid, prevTicker.Bid, 2)
 	}
 	if historyLength > 21 {
-		t.Pd20 = mathutils.PercDiff(t.Bid, history.At(historyLength-21).Bid, 2)
+		t.Change20m = mathutils.PercDiff(t.Bid, history.At(historyLength-21).Bid, 2)
 
 		// calculate RSI
 		bidHistory := make([]float64, 20)
 		for i := 0; i < 20; i++ {
 			bidHistory[i] = history.At(historyLength - 20 + i).Bid
 		}
-		t.Rsi20 = mathutils.Round(tradeutils.CalculateRSI(bidHistory, 20), 1)
+		t.RSI20 = mathutils.Round(tradeutils.CalculateRSI(bidHistory, 20), 1)
 	}
 }
 

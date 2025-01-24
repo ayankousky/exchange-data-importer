@@ -12,7 +12,7 @@ type Ticker struct {
 	BidPrice    float64
 	AskQuantity float64
 	BidQuantity float64
-	EventDate   time.Time
+	EventAt     time.Time
 }
 
 // Liquidation represents a liquidation data imported from an exchange
@@ -22,8 +22,7 @@ type Liquidation struct {
 	Price      float64
 	Quantity   float64
 	TotalPrice float64
-	EventDate  time.Time
-	Date       time.Time
+	EventAt    time.Time
 }
 
 // Exchange represents an exchange that can be queried for data

@@ -2,11 +2,12 @@ package binance
 
 import (
 	"context"
-	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,8 +41,8 @@ func TestClient_FetchTickers(t *testing.T) {
 			]`,
 			expectedError: false,
 			expectedTickers: []exchanges.Ticker{
-				{Symbol: "BTCUSDT", BidPrice: 40000.0, AskPrice: 40010.0, BidQuantity: 1.5, AskQuantity: 1.0, EventDate: time.Unix(0, 1735286548259*int64(time.Millisecond))},
-				{Symbol: "ETHUSDT", BidPrice: 2500.0, AskPrice: 2510.0, BidQuantity: 2.0, AskQuantity: 2.5, EventDate: time.Unix(0, 1735286548259*int64(time.Millisecond))},
+				{Symbol: "BTCUSDT", BidPrice: 40000.0, AskPrice: 40010.0, BidQuantity: 1.5, AskQuantity: 1.0, EventAt: time.Unix(0, 1735286548259*int64(time.Millisecond))},
+				{Symbol: "ETHUSDT", BidPrice: 2500.0, AskPrice: 2510.0, BidQuantity: 2.0, AskQuantity: 2.5, EventAt: time.Unix(0, 1735286548259*int64(time.Millisecond))},
 			},
 		},
 		{
