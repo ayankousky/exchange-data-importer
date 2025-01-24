@@ -10,9 +10,6 @@ import (
 	"github.com/ayankousky/exchange-data-importer/pkg/utils"
 )
 
-// MaxTickHistory is the maximum number of tick snapshots to keep in memory
-const MaxTickHistory = 25
-
 // RepositoryFactory is a contract for creating repositories
 // each exchange must have its own separate repository
 type RepositoryFactory interface {
@@ -26,8 +23,8 @@ type Importer struct {
 	tickRepository        domain.TickRepository
 	liquidationRepository domain.LiquidationRepository
 
-	tickerHistory map[domain.TickerName]*utils.RingBuffer[*domain.Ticker]
 	tickHistory   *utils.RingBuffer[*domain.Tick]
+	tickerHistory map[domain.TickerName]*utils.RingBuffer[*domain.Ticker]
 }
 
 // NewImporter creates a new Importer
@@ -38,11 +35,35 @@ func NewImporter(exchange exchanges.Exchange, repositoryFactory RepositoryFactor
 		liquidationRepository: repositoryFactory.GetLiquidationRepository(exchange.GetName()),
 
 		tickerHistory: make(map[domain.TickerName]*utils.RingBuffer[*domain.Ticker]),
-		tickHistory:   utils.NewRingBuffer[*domain.Tick](MaxTickHistory),
+		tickHistory:   utils.NewRingBuffer[*domain.Tick](domain.MaxTickHistory),
 	}
 }
 
-func (i *Importer) importTickers() error {
+// StartImportLoop starts a loop that imports data from the exchange every second
+// This simulates a real-time import process and stores the results in the database.
+func (i *Importer) StartImportLoop(interval time.Duration) {
+	// Initialize the history data for calculating tick indicators
+	i.initHistory()
+
+	// Import should be started exactly at the beginning of each second
+	now := time.Now()
+	nextSecond := now.Truncate(time.Second).Add(time.Second)
+	time.Sleep(nextSecond.Sub(now))
+	fmt.Println("Starting import loop at", time.Now())
+
+	// Start the import loop with the specified interval
+	timeTicker := time.NewTicker(interval)
+	defer timeTicker.Stop()
+	for {
+		<-timeTicker.C
+		err := i.importTick()
+		if err != nil {
+			fmt.Println(time.Now())
+		}
+	}
+}
+
+func (i *Importer) importTick() error {
 	startAt := time.Now()
 	// Fetch tickers from the exchange
 	fetchedTickers, err := i.fetchTickers()
@@ -108,23 +129,6 @@ func (i *Importer) buildTick(tick *domain.Tick, eTickers []exchanges.Ticker) err
 	return nil
 }
 
-// StartImportEverySecond starts a loop that imports data from the exchange every second
-// This simulates a real-time import process and stores the results in the database.
-func (i *Importer) StartImportEverySecond() {
-	i.initHistory()
-	for {
-		// continue the loop every second
-		now := time.Now()
-		next := now.Truncate(time.Second).Add(time.Second)
-		time.Sleep(time.Until(next))
-
-		err := i.importTickers()
-		if err != nil {
-			fmt.Println(now)
-		}
-	}
-}
-
 func (i *Importer) addTickHistory(tick *domain.Tick) {
 	i.tickHistory.Push(tick)
 }
@@ -161,7 +165,7 @@ func (i *Importer) addTickerHistory(ticker *domain.Ticker) {
 }
 
 func (i *Importer) initHistory() {
-	history, _ := i.tickRepository.GetHistorySince(context.Background(), time.Now().Add(-MaxTickHistory*time.Minute))
+	history, _ := i.tickRepository.GetHistorySince(context.Background(), time.Now().Add(-domain.MaxTickHistory*time.Minute))
 	for _, tick := range history {
 		i.addTickHistory(&tick)
 		for _, ticker := range tick.Data {
@@ -173,7 +177,7 @@ func (i *Importer) initHistory() {
 func (i *Importer) getTickerHistory(tickerName domain.TickerName) *utils.RingBuffer[*domain.Ticker] {
 	history, ok := i.tickerHistory[tickerName]
 	if !ok {
-		history = utils.NewRingBuffer[*domain.Ticker](MaxTickHistory)
+		history = utils.NewRingBuffer[*domain.Ticker](domain.MaxTickHistory)
 		i.tickerHistory[tickerName] = history
 	}
 	return history

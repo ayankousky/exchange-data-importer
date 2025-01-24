@@ -3,14 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/ayankousky/exchange-data-importer/internal/importer"
-	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/db"
-	binance2 "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/binance"
-	"github.com/ayankousky/exchange-data-importer/internal/repository/mongo"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
+
+	"github.com/ayankousky/exchange-data-importer/internal/importer"
+	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/db"
+	binance2 "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/binance"
+	"github.com/ayankousky/exchange-data-importer/internal/repository/mongo"
 )
 
 func main() {
@@ -32,7 +34,7 @@ func main() {
 	mongoFactory, _ := mongo.NewMongoRepoFactory(mongoClient)
 
 	binanceImporter := importer.NewImporter(binanceClient, mongoFactory)
-	binanceImporter.StartImportEverySecond()
+	binanceImporter.StartImportLoop(time.Second)
 
 	_, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

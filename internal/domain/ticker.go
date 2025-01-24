@@ -38,7 +38,7 @@ type Ticker struct {
 	Min10Diff float64 `db:"min_10_diff" json:"min_10_diff" bson:"min_10_diff"` // (Ask - Min10) / Min10 * 100
 }
 
-// CalculateIndicators calculates the indicators for current moment
+// CalculateIndicators calculates the indicators for current moment based on the history data
 // each history item is a minute of data
 func (t *Ticker) CalculateIndicators(history *utils.RingBuffer[*Ticker], lastTick *Tick) {
 	// Safety checks

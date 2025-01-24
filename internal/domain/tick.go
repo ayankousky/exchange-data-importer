@@ -8,6 +8,11 @@ import (
 	"github.com/ayankousky/exchange-data-importer/pkg/utils/mathutils"
 )
 
+const (
+	// MaxTickHistory is the maximum number of tick snapshots to keep in memory
+	MaxTickHistory = 25
+)
+
 // Tick represents a snapshot of market data for multiple tickers at a specific point in time
 // It includes average metrics, liquidation counts,and a map of Ticker data keyed by a TickerName
 // This item is stored in the database
@@ -51,7 +56,7 @@ type TickRepository interface {
 	GetHistorySince(ctx context.Context, since time.Time) ([]Tick, error)
 }
 
-// CalculateIndicators calculates the indicators for the current tick
+// CalculateIndicators calculates the indicators for the current tick based on the history data
 func (t *Tick) CalculateIndicators(history *utils.RingBuffer[*Tick]) {
 	if history.Len() <= 1 {
 		return
