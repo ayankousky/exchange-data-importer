@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"runtime"
+	"sync"
 	"time"
 
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
@@ -25,6 +27,7 @@ type Importer struct {
 
 	tickHistory   *utils.RingBuffer[*domain.Tick]
 	tickerHistory map[domain.TickerName]*utils.RingBuffer[*domain.Ticker]
+	tickerMutex   sync.Mutex
 }
 
 // NewImporter creates a new Importer
@@ -122,34 +125,75 @@ func (i *Importer) fetchTickers(ctx context.Context) ([]exchanges.Ticker, error)
 	return i.exchange.FetchTickers(ctx)
 }
 
-// buildTick calculates any indicators and populates domain.Tick
-// this should never fail, we must always have valid data
+// buildTick calculates indicators and populates domain.Tick.
+// This function should never fail; we must always ensure valid data is present.
+// Note: For a small history length, concurrent processing is unnecessary.
+// We can use a single-thread worker for exchanges where large calculations (such as RSI200) are not required.
 func (i *Importer) buildTick(tick *domain.Tick, eTickers []exchanges.Ticker) {
 	lastTick, _ := i.tickHistory.Last()
 
-	// Calculate tickers indicators
-	for _, eTicker := range eTickers {
-		ticker := &domain.Ticker{
-			Symbol:    domain.TickerName(eTicker.Symbol),
-			Ask:       eTicker.AskPrice,
-			Bid:       eTicker.BidPrice,
-			EventAt:   eTicker.EventAt,
-			CreatedAt: tick.StartAt,
-		}
+	wg := sync.WaitGroup{}
+	numWorkers := runtime.NumCPU()
+	taskChannel := make(chan exchanges.Ticker, numWorkers)
+	resultChannel := make(chan *domain.Ticker, len(eTickers))
 
-		if !ticker.IsValid() {
-			// Skipping invalid ticker. Not necessarily an error.
-			continue
-		}
+	// Handle tickers data in parallel
+	worker := func(tasks <-chan exchanges.Ticker, results chan<- *domain.Ticker) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("Worker panic: %v\n", r)
+			}
+		}()
 
-		i.addTickerHistory(ticker)
-		ticker.CalculateIndicators(i.getTickerHistory(ticker.Symbol), lastTick)
-		tick.SetTicker(ticker)
+		for exchangeTicker := range tasks {
+			ticker, err := i.buildTicker(*tick, lastTick, exchangeTicker)
+			if err != nil {
+				continue
+			}
+			results <- ticker
+		}
 	}
 
-	// Calculate the tick indicators
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			worker(taskChannel, resultChannel)
+		}()
+	}
+
+	for _, eTicker := range eTickers {
+		taskChannel <- eTicker
+	}
+	close(taskChannel)
+	go func() {
+		wg.Wait()
+		close(resultChannel)
+	}()
+	for processedTicker := range resultChannel {
+		tick.SetTicker(processedTicker)
+	}
+
 	i.addTickHistory(tick)
 	tick.CalculateIndicators(i.tickHistory)
+}
+
+func (i *Importer) buildTicker(currTick domain.Tick, lastTick *domain.Tick, eTicker exchanges.Ticker) (*domain.Ticker, error) {
+	ticker := &domain.Ticker{
+		Symbol:    domain.TickerName(eTicker.Symbol),
+		Ask:       eTicker.AskPrice,
+		Bid:       eTicker.BidPrice,
+		EventAt:   eTicker.EventAt,
+		CreatedAt: currTick.StartAt,
+	}
+
+	if !ticker.IsValid() {
+		return nil, fmt.Errorf("invalid ticker data: %v", ticker)
+	}
+
+	i.addTickerHistory(ticker)
+	ticker.CalculateIndicators(i.getTickerHistory(ticker.Symbol), lastTick)
+	return ticker, nil
 }
 
 func (i *Importer) addTickHistory(tick *domain.Tick) {
@@ -186,6 +230,10 @@ func (i *Importer) addTickerHistory(ticker *domain.Ticker) {
 }
 
 func (i *Importer) getTickerHistory(tickerName domain.TickerName) *utils.RingBuffer[*domain.Ticker] {
+	// protect the map from concurrent reads
+	i.tickerMutex.Lock()
+	defer i.tickerMutex.Unlock()
+
 	history, ok := i.tickerHistory[tickerName]
 	if !ok {
 		history = utils.NewRingBuffer[*domain.Ticker](domain.MaxTickHistory)
