@@ -24,7 +24,7 @@ func main() {
 	binanceClient := binanceExchange.NewBinance(binanceExchange.Config{
 		APIUrl:     binanceExchange.FuturesAPIURL,
 		WSUrl:      binanceExchange.FuturesWSUrl,
-		HTTPClient: http.DefaultClient,
+		HTTPClient: &http.Client{Timeout: 5 * time.Second},
 		Name:       "binance",
 	})
 

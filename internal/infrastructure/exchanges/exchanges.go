@@ -27,6 +27,13 @@ type Liquidation struct {
 
 // Exchange represents an exchange that can be queried for data
 type Exchange interface {
+	// GetName returns the name of the exchange
+	// Required to create corresponding collections/tables etc
 	GetName() string
+
+	// FetchTickers fetches the latest tickers from the exchange
 	FetchTickers(ctx context.Context) ([]Ticker, error)
+
+	// SubscribeLiquidations subscribes to liquidation events from the exchange
+	SubscribeLiquidations(ctx context.Context) (<-chan Liquidation, <-chan error)
 }

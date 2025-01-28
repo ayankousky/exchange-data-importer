@@ -3,6 +3,7 @@ package mock
 import (
 	"context"
 	"fmt"
+
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges"
 	"github.com/ayankousky/exchange-data-importer/pkg/utils/mathutils"
 )
@@ -35,6 +36,29 @@ func (bc *Client) FetchTickers(_ context.Context) ([]exchanges.Ticker, error) {
 	tickers := bc.data[bc.cursor]
 	bc.cursor++
 	return tickers, nil
+}
+
+// SubscribeLiquidations mock method
+func (bc *Client) SubscribeLiquidations(_ context.Context) (liquidationsChannel <-chan exchanges.Liquidation, errorsChannel <-chan error) {
+	out := make(chan exchanges.Liquidation)
+	errCh := make(chan error, 1)
+
+	go func() {
+		defer close(out)
+		defer close(errCh)
+		for i := 0; i < 10; i++ {
+			out <- exchanges.Liquidation{
+				Symbol:     "BTCUSDT",
+				Side:       "SELL",
+				Price:      104388.6,
+				Quantity:   0.002,
+				TotalPrice: 104388.6 * 0.002,
+			}
+		}
+
+		errCh <- fmt.Errorf("not implemented")
+	}()
+	return out, errCh
 }
 
 // GenerateData populates the mock data

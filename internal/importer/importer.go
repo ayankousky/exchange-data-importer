@@ -42,8 +42,49 @@ func NewImporter(exchange exchanges.Exchange, repositoryFactory RepositoryFactor
 	}
 }
 
+// StartLiquidationsImport starts importing liquidations from the exchange
+func (i *Importer) StartLiquidationsImport(ctx context.Context) {
+	liqChan, errChan := i.exchange.SubscribeLiquidations(ctx)
+	if liqChan == nil || errChan == nil {
+		log.Printf("Failed to subscribe to liquidations for exchange %s\n", i.exchange.GetName())
+		return
+	}
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				fmt.Println("Liquidation import stopped (context canceled).")
+				return
+			case liq := <-liqChan:
+				// Convert the `exchanges.Liquidation` to your domain model
+				domainLiq := domain.Liquidation{
+					Order: domain.Order{
+						Symbol:     domain.TickerName(liq.Symbol),
+						EventAt:    liq.EventAt,
+						Side:       domain.OrderSide(liq.Side),
+						Price:      liq.Price,
+						Quantity:   liq.Quantity,
+						TotalPrice: liq.TotalPrice,
+					},
+					EventAt:  liq.EventAt,
+					StoredAt: time.Now(),
+				}
+				// Store it
+				err := i.liquidationRepository.Create(context.Background(), domainLiq)
+				if err != nil {
+					fmt.Printf("Failed storing liquidation: %v\n", err)
+				}
+			case err := <-errChan:
+				fmt.Printf("Error on liquidation stream: %v\n", err)
+			}
+		}
+	}()
+}
+
 // StartImportLoop starts a loop that imports data from the exchange periodically.
 func (i *Importer) StartImportLoop(ctx context.Context, interval time.Duration) error {
+	i.StartLiquidationsImport(ctx)
 	// Initialize the history data for calculating tick indicators
 	if err := i.initHistory(ctx); err != nil {
 		return fmt.Errorf("failed to init history: %w", err)
