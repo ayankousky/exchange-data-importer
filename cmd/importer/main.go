@@ -2,16 +2,19 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/ayankousky/exchange-data-importer/internal/importer"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/db"
 	binanceExchange "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/binance"
+	bybitExchange "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/bybit"
 	"github.com/ayankousky/exchange-data-importer/internal/repository/mongo"
 )
 
@@ -20,13 +23,6 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-
-	binanceClient := binanceExchange.NewBinance(binanceExchange.Config{
-		APIUrl:     binanceExchange.FuturesAPIURL,
-		WSUrl:      binanceExchange.FuturesWSUrl,
-		HTTPClient: &http.Client{Timeout: 5 * time.Second},
-		Name:       "binance",
-	})
 
 	// Create a new mongo client
 	mongoClient, err := db.NewMongoClient("mongodb://beatbet-db-mongo:27017")
@@ -41,11 +37,42 @@ func main() {
 		return
 	}
 
-	binanceImporter := importer.NewImporter(binanceClient, mongoFactory)
-	if err := binanceImporter.StartImportLoop(ctx, time.Second); err != nil {
-		log.Printf("Error starting import loop: %v", err)
-		return
+	importers := make([]*importer.Importer, 0)
+
+	binanceClient := binanceExchange.NewBinance(binanceExchange.Config{
+		APIUrl:     binanceExchange.FuturesAPIURL,
+		WSUrl:      binanceExchange.FuturesWSUrl,
+		HTTPClient: &http.Client{Timeout: 5 * time.Second},
+		Name:       "binance",
+	})
+	importers = append(importers, importer.NewImporter(binanceClient, mongoFactory))
+
+	bybitClient := bybitExchange.NewBybit(bybitExchange.Config{
+		APIUrl:     bybitExchange.FuturesAPIURL,
+		WSUrl:      bybitExchange.FuturesWSUrl,
+		HTTPClient: &http.Client{Timeout: 5 * time.Second},
+		Name:       "bybit",
+	})
+	importers = append(importers, importer.NewImporter(bybitClient, mongoFactory))
+
+	var wg sync.WaitGroup
+	wg.Add(len(importers))
+
+	for _, i := range importers {
+		go func(i *importer.Importer) {
+			defer wg.Done()
+			if err := i.StartImportLoop(ctx, time.Second); err != nil {
+				log.Printf("Error starting import loop: %v", err)
+			}
+		}(i)
 	}
 
+	go func() {
+		wg.Wait()
+		fmt.Println("All importers have stopped!!!!!")
+		stop()
+	}()
+
+	<-ctx.Done()
 	log.Printf("Exiting...")
 }

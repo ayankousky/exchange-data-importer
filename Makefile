@@ -6,8 +6,8 @@ lint:
 test:
 	go test -cover ./...
 
-test_race:
+rtest:
 	go test -race -cover -timeout 5s ./...
 
 
-.PHONY: lint test test_race
+.PHONY: lint test rtest
