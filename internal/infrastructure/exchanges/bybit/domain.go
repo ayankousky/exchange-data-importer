@@ -3,7 +3,6 @@ package bybit
 import (
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges"
@@ -105,7 +104,15 @@ func (bl LiquidationDTO) toLiquidation() (exchanges.Liquidation, error) {
 	liquidation.Quantity = quantity
 	liquidation.Symbol = bl.Symbol
 	liquidation.EventAt = time.Unix(0, bl.UpdatedTime*int64(time.Millisecond))
-	liquidation.Side = strings.ToUpper(bl.Side)
+	switch bl.Side {
+	case "Buy":
+		liquidation.Side = "SELL"
+	case "Sell":
+		liquidation.Side = "BUY"
+	default:
+		return liquidation, fmt.Errorf("invalid side '%s'", bl.Side)
+
+	}
 
 	return liquidation, nil
 }

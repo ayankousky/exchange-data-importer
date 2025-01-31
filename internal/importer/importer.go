@@ -149,7 +149,7 @@ func (i *Importer) importTick(ctx context.Context) error {
 	}
 
 	// Build the tick using the fetched data
-	i.buildTick(newTick, fetchedTickers)
+	i.buildTick(ctx, newTick, fetchedTickers)
 	newTick.CreatedAt = time.Now()
 	newTick.HandlingDuration = time.Since(newTick.FetchedAt)
 
@@ -170,15 +170,27 @@ func (i *Importer) fetchTickers(ctx context.Context) ([]exchanges.Ticker, error)
 // This function should never fail; we must always ensure valid data is present.
 // Note: For a small history length, concurrent processing is unnecessary.
 // We can use a single-thread worker for exchanges where large calculations (such as RSI200) are not required.
-func (i *Importer) buildTick(tick *domain.Tick, eTickers []exchanges.Ticker) {
+func (i *Importer) buildTick(ctx context.Context, tick *domain.Tick, eTickers []exchanges.Ticker) {
 	lastTick, _ := i.tickHistory.Last()
 
+	// Set liquidations data
+	liquidationsHistory, err := i.liquidationRepository.GetLiquidationsHistory(ctx, tick.StartAt)
+	if err != nil {
+		log.Printf("Error getting liquidations history: %v", err)
+	}
+	tick.LL1 = liquidationsHistory.LongLiquidations1s
+	tick.LL2 = liquidationsHistory.LongLiquidations2s
+	tick.LL5 = liquidationsHistory.LongLiquidations5s
+	tick.LL60 = liquidationsHistory.LongLiquidations60s
+	tick.SL1 = liquidationsHistory.ShortLiquidations1s
+	tick.SL2 = liquidationsHistory.ShortLiquidations2s
+	tick.SL10 = liquidationsHistory.ShortLiquidations10s
+
+	// Handle tickers data in parallel
 	wg := sync.WaitGroup{}
 	numWorkers := runtime.NumCPU()
 	taskChannel := make(chan exchanges.Ticker, numWorkers)
 	resultChannel := make(chan *domain.Ticker, len(eTickers))
-
-	// Handle tickers data in parallel
 	worker := func(tasks <-chan exchanges.Ticker, results chan<- *domain.Ticker) {
 		defer func() {
 			if r := recover(); r != nil {
@@ -215,6 +227,7 @@ func (i *Importer) buildTick(tick *domain.Tick, eTickers []exchanges.Ticker) {
 		tick.SetTicker(processedTicker)
 	}
 
+	// Calculate tick averages
 	i.addTickHistory(tick)
 	tick.CalculateIndicators(i.tickHistory)
 }

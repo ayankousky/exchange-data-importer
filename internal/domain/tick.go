@@ -25,14 +25,14 @@ type Tick struct {
 	HandlingDuration time.Duration `db:"handling_duration" json:"handling_duration" bson:"handling_duration"`
 
 	AvgBuy10 float64 `db:"tick_avg_buy_open" json:"tick_avg_buy_open" bson:"tick_avg_buy_open"`
-	LL1      int16   `db:"ll_1" json:"ll_1" bson:"ll_1"`    // 1s second total long liquidations
-	LL2      int16   `db:"ll_2" json:"ll_2" bson:"ll_2"`    // 2s second total long liquidations
-	LL5      int16   `db:"ll_5" json:"ll_5" bson:"ll_5"`    // 5s second total long liquidations
-	LL60     int32   `db:"ll_60" json:"ll_60" bson:"ll_60"` // 60s second total long liquidations
-	SL1      int16   `db:"sl_1" json:"sl_1" bson:"sl_1"`    // 1s second total short liquidations
-	SL2      int16   `db:"sl_2" json:"sl_2" bson:"sl_2"`    // 2s second total short liquidations
-	SL10     int16   `db:"sl_10" json:"sl_10" bson:"sl_10"` // 10s second total short liquidations
-	BSL4     int16   `db:"bsl_4" json:"bsl_4" bson:"bsl_4"` // 4s bitcoin total short liquidations
+	LL1      int64   `db:"ll_1" json:"ll_1" bson:"ll_1"`    // 1s second total long liquidations
+	LL2      int64   `db:"ll_2" json:"ll_2" bson:"ll_2"`    // 2s second total long liquidations
+	LL5      int64   `db:"ll_5" json:"ll_5" bson:"ll_5"`    // 5s second total long liquidations
+	LL60     int64   `db:"ll_60" json:"ll_60" bson:"ll_60"` // 60s second total long liquidations
+	SL1      int64   `db:"sl_1" json:"sl_1" bson:"sl_1"`    // 1s second total short liquidations
+	SL2      int64   `db:"sl_2" json:"sl_2" bson:"sl_2"`    // 2s second total short liquidations
+	SL10     int64   `db:"sl_10" json:"sl_10" bson:"sl_10"` // 10s second total short liquidations
+	BSL4     int64   `db:"bsl_4" json:"bsl_4" bson:"bsl_4"` // 4s bitcoin total short liquidations
 
 	Avg TickAvg `db:"avg" json:"avg" bson:"avg"`
 	// store data as map to be able to query by ticker name or project the data

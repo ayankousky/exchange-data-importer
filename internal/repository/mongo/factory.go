@@ -35,5 +35,9 @@ func (f *Factory) GetTickRepository(name string) domain.TickRepository {
 
 // GetLiquidationRepository returns a new LiquidationRepository
 func (f *Factory) GetLiquidationRepository(name string) domain.LiquidationRepository {
-	return &Liquidation{db: f.client.Database("exchange").Collection(name + "_liquidation")}
+	repo, err := NewLiquidationRepository(f.client.Database("exchange").Collection(name + "_liquidation"))
+	if err != nil {
+		log.Printf("Error creating liquidation repository: %v", err)
+	}
+	return repo
 }

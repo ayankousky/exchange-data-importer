@@ -7,6 +7,7 @@ import (
 
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
 	domainMock "github.com/ayankousky/exchange-data-importer/internal/domain/mock"
+	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges"
 	exchangeMock "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/mock"
 	repoMock "github.com/ayankousky/exchange-data-importer/internal/repository/mock"
 	"github.com/stretchr/testify/assert"
@@ -107,4 +108,52 @@ func TestInitHistory(t *testing.T) {
 	assert.Equal(t, 604932.5165, btcHistory.At(btcHistory.Len()-2).Ask)
 	assert.Equal(t, 573615.9065, btcHistory.At(btcHistory.Len()-3).Ask)
 	assert.Equal(t, lastTick.Data["BTCUSDT"].Ask, btcHistory.At(btcHistory.Len()-1).Ask)
+}
+
+func TestBuildTick(t *testing.T) {
+	tests := []struct {
+		name               string
+		tickers            []exchanges.Ticker
+		expectedTickersLen int
+		expectedLL60       int64
+		expectedSL10       int64
+	}{
+		{
+			name: "should build tick with valid tickers",
+			tickers: []exchanges.Ticker{
+				{Symbol: "BTCUSDT", AskPrice: 50000, BidPrice: 49900},
+				{Symbol: "ETHUSDT", AskPrice: 3000, BidPrice: 2990},
+			},
+			expectedTickersLen: 2,
+			expectedLL60:       600,
+			expectedSL10:       10,
+		},
+		{
+			name:               "should handle empty tickers",
+			tickers:            []exchanges.Ticker{},
+			expectedTickersLen: 0,
+			expectedLL60:       600,
+			expectedSL10:       10,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			repoFactory := repoMock.NewFactoryMock()
+			exchange := exchangeMock.NewMockClient("mockExchange")
+			importer := NewImporter(exchange, repoFactory)
+
+			tick := &domain.Tick{
+				StartAt: time.Now(),
+				Data:    make(map[domain.TickerName]*domain.Ticker),
+			}
+
+			importer.buildTick(ctx, tick, tt.tickers)
+
+			assert.Len(t, tick.Data, tt.expectedTickersLen)
+			assert.Equal(t, tt.expectedLL60, tick.LL60)
+			assert.Equal(t, tt.expectedSL10, tick.SL10)
+		})
+	}
 }

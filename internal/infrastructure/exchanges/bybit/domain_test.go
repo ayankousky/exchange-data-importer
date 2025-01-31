@@ -116,7 +116,7 @@ func TestLiquidationDTO_ToLiquidation(t *testing.T) {
 			},
 			want: exchanges.Liquidation{
 				Symbol:   "BTCUSDT",
-				Side:     "SELL",
+				Side:     "BUY",
 				Price:    50000.50,
 				Quantity: 0.001,
 				EventAt:  time.UnixMilli(1635739200000),

@@ -167,7 +167,6 @@ func (bc *Client) connectAndHandle(ctx context.Context, out chan<- exchanges.Liq
 
 	availableTickers := bc.getAvailableTickers()
 	if len(availableTickers) == 0 {
-		log.Printf("Warning: no available tickers to subscribe (%s)", bc.GetName())
 		return nil
 	}
 
