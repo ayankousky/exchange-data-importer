@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+//go:generate moq --out mocks/liquidation_repository.go --pkg mocks --with-resets --skip-ensure . LiquidationRepository
+
 // LiquidationType represents the type of liquidation
 type LiquidationType string
 

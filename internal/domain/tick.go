@@ -8,6 +8,8 @@ import (
 	"github.com/ayankousky/exchange-data-importer/pkg/utils/mathutils"
 )
 
+//go:generate moq --out mocks/tick_repository.go --pkg mocks --with-resets --skip-ensure . TickRepository
+
 const (
 	// MaxTickHistory is the maximum number of tick snapshots to keep in memory
 	MaxTickHistory = 25

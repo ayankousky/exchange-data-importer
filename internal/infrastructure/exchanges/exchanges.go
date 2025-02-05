@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+//go:generate moq --out mocks/exchange.go --pkg mocks --with-resets --skip-ensure . Exchange
+
 // Ticker represents a ticker data imported from an exchange
 type Ticker struct {
 	Symbol      string

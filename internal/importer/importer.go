@@ -13,6 +13,8 @@ import (
 	"github.com/ayankousky/exchange-data-importer/pkg/utils"
 )
 
+//go:generate moq --out mocks/repository_factory.go --pkg mocks --with-resets --skip-ensure . RepositoryFactory
+
 // RepositoryFactory is a contract for creating repositories
 type RepositoryFactory interface {
 	GetTickRepository(name string) domain.TickRepository

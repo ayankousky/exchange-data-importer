@@ -9,5 +9,8 @@ test:
 rtest:
 	go test -race -cover -timeout 5s ./...
 
+gen:
+	go generate ./...
 
-.PHONY: lint test rtest
+
+.PHONY: lint test rtest gen
