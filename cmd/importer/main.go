@@ -15,6 +15,7 @@ import (
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/db"
 	binanceExchange "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/binance"
 	bybitExchange "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/bybit"
+	okxExchange "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/okx"
 	"github.com/ayankousky/exchange-data-importer/internal/repository/mongo"
 )
 
@@ -37,6 +38,7 @@ func main() {
 		return
 	}
 
+	// we will have a list of importers so we could add new exchange in one place
 	importers := make([]*importer.Importer, 0)
 
 	binanceClient := binanceExchange.NewBinance(binanceExchange.Config{
@@ -54,6 +56,14 @@ func main() {
 		Name:       "bybit",
 	})
 	importers = append(importers, importer.NewImporter(bybitClient, mongoFactory))
+
+	okxClient := okxExchange.NewOKX(okxExchange.Config{
+		APIUrl:     okxExchange.FuturesAPIURL,
+		WSUrl:      okxExchange.FuturesWSUrl,
+		HTTPClient: &http.Client{Timeout: 5 * time.Second},
+		Name:       "okx",
+	})
+	importers = append(importers, importer.NewImporter(okxClient, mongoFactory))
 
 	var wg sync.WaitGroup
 	wg.Add(len(importers))
