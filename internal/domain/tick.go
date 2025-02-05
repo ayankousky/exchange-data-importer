@@ -32,7 +32,6 @@ type Tick struct {
 	SL1      int64   `db:"sl_1" json:"sl_1" bson:"sl_1"`    // 1s second total short liquidations
 	SL2      int64   `db:"sl_2" json:"sl_2" bson:"sl_2"`    // 2s second total short liquidations
 	SL10     int64   `db:"sl_10" json:"sl_10" bson:"sl_10"` // 10s second total short liquidations
-	BSL4     int64   `db:"bsl_4" json:"bsl_4" bson:"bsl_4"` // 4s bitcoin total short liquidations
 
 	Avg TickAvg `db:"avg" json:"avg" bson:"avg"`
 	// store data as map to be able to query by ticker name or project the data

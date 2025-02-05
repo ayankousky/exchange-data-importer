@@ -24,7 +24,6 @@ func GenerateTick(i int) domain.Tick {
 		SL1:              15,
 		SL2:              30,
 		SL10:             100,
-		BSL4:             5,
 		LL60:             150,
 		Avg: domain.TickAvg{
 			Change1m:     mathutils.Round(-0.07*multiplier, 6),
