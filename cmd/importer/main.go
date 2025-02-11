@@ -17,7 +17,7 @@ import (
 	bybitExchange "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/bybit"
 	okxExchange "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/okx"
 	redisNotificator "github.com/ayankousky/exchange-data-importer/internal/infrastructure/notify"
-	"github.com/ayankousky/exchange-data-importer/internal/repository/mongo"
+	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/repository/mongo"
 )
 
 func main() {
