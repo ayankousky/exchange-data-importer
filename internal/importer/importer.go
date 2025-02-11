@@ -10,6 +10,7 @@ import (
 
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges"
+	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/notify"
 	"github.com/ayankousky/exchange-data-importer/pkg/utils"
 )
 
@@ -27,6 +28,8 @@ type Importer struct {
 	tickRepository        domain.TickRepository
 	liquidationRepository domain.LiquidationRepository
 
+	marketNotifiers []notify.Client
+
 	tickHistory   *utils.RingBuffer[*domain.Tick]
 	tickerHistory map[domain.TickerName]*utils.RingBuffer[*domain.Ticker]
 	tickerMutex   sync.Mutex
@@ -38,6 +41,8 @@ func NewImporter(exchange exchanges.Exchange, repositoryFactory RepositoryFactor
 		exchange:              exchange,
 		tickRepository:        repositoryFactory.GetTickRepository(exchange.GetName()),
 		liquidationRepository: repositoryFactory.GetLiquidationRepository(exchange.GetName()),
+
+		marketNotifiers: make([]notify.Client, 0),
 
 		tickerHistory: make(map[domain.TickerName]*utils.RingBuffer[*domain.Ticker]),
 		tickHistory:   utils.NewRingBuffer[*domain.Tick](domain.MaxTickHistory),
@@ -154,6 +159,8 @@ func (i *Importer) importTick(ctx context.Context) error {
 	i.buildTick(ctx, newTick, fetchedTickers)
 	newTick.CreatedAt = time.Now()
 	newTick.HandlingDuration = time.Since(newTick.FetchedAt)
+
+	i.notifyNewTick(newTick)
 
 	// Store the tick in the database
 	if err := i.tickRepository.Create(ctx, *newTick); err != nil {
@@ -305,4 +312,33 @@ func (i *Importer) getLastTicker(tickerName domain.TickerName) (*domain.Ticker, 
 		return nil, fmt.Errorf("no ticker history found for %s", tickerName)
 	}
 	return lastTicker, nil
+}
+
+// WithMarketNotify adds a new publisher to the list of marketNotifiers
+func (i *Importer) WithMarketNotify(notifier notify.Client) {
+	i.marketNotifiers = append(i.marketNotifiers, notifier)
+}
+
+// notifyNewTick sends a notification to all services who are subscribed to market data
+func (i *Importer) notifyNewTick(tick *domain.Tick) {
+	// notify bots
+	for _, publisher := range i.marketNotifiers {
+		for tickerName := range tick.Data {
+			tickerNotification, err := domain.NewTickerNotification(tick, tickerName)
+			if err != nil {
+				log.Printf("Failed to create ticker notification: %v", err)
+				continue
+			}
+
+			event := notify.Event{
+				Time:      time.Now(),
+				EventType: domain.EventTypeTicker,
+				Data:      tickerNotification,
+			}
+
+			if err := publisher.Send(context.Background(), event); err != nil {
+				log.Printf("Failed to publish tick: %v", err)
+			}
+		}
+	}
 }

@@ -12,10 +12,12 @@ import (
 	"time"
 
 	"github.com/ayankousky/exchange-data-importer/internal/importer"
+	"github.com/ayankousky/exchange-data-importer/internal/infrastructure"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/db"
 	binanceExchange "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/binance"
 	bybitExchange "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/bybit"
 	okxExchange "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/okx"
+	redisNotificator "github.com/ayankousky/exchange-data-importer/internal/infrastructure/notify"
 	"github.com/ayankousky/exchange-data-importer/internal/repository/mongo"
 )
 
@@ -41,13 +43,21 @@ func main() {
 	// we will have a list of importers so we could add new exchange in one place
 	importers := make([]*importer.Importer, 0)
 
+	redisClient, err := infrastructure.NewRedisClient(ctx, "redis://beatbet-redis:6379", 1)
+	if err != nil {
+		log.Printf("Error creating redis client: %v", err)
+		return
+	}
+
 	binanceClient := binanceExchange.NewBinance(binanceExchange.Config{
 		APIUrl:     binanceExchange.FuturesAPIURL,
 		WSUrl:      binanceExchange.FuturesWSUrl,
 		HTTPClient: &http.Client{Timeout: 5 * time.Second},
 		Name:       "binance",
 	})
-	importers = append(importers, importer.NewImporter(binanceClient, mongoFactory))
+	binanceImporter := importer.NewImporter(binanceClient, mongoFactory)
+	binanceImporter.WithMarketNotify(redisNotificator.NewRedisNotifier(redisClient, fmt.Sprintf("exchange:%s:market", binanceClient.GetName())))
+	importers = append(importers, binanceImporter)
 
 	bybitClient := bybitExchange.NewBybit(bybitExchange.Config{
 		APIUrl:     bybitExchange.FuturesAPIURL,
@@ -64,6 +74,7 @@ func main() {
 		Name:       "okx",
 	})
 	importers = append(importers, importer.NewImporter(okxClient, mongoFactory))
+	importers = importers[:1] // temporary use only binance
 
 	var wg sync.WaitGroup
 	wg.Add(len(importers))

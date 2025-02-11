@@ -10,6 +10,8 @@ import (
 	importerMocks "github.com/ayankousky/exchange-data-importer/internal/importer/mocks"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges"
 	exchangeMocks "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/mocks"
+	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/notify"
+	notifyMock "github.com/ayankousky/exchange-data-importer/internal/infrastructure/notify/mocks"
 	"github.com/ayankousky/exchange-data-importer/pkg/utils/mathutils"
 	"github.com/stretchr/testify/assert"
 )
@@ -232,6 +234,100 @@ func TestBuildTick(t *testing.T) {
 			assert.Len(t, tick.Data, tt.expectedTickersLen)
 			assert.Equal(t, tt.expectedLL60, tick.LL60)
 			assert.Equal(t, tt.expectedSL10, tick.SL10)
+		})
+	}
+}
+
+func TestNotifyNewTick(t *testing.T) {
+	tests := []struct {
+		name          string
+		tick          *domain.Tick
+		notifierCount int
+		wantEventType string
+		wantCalls     int
+	}{
+		{
+			name: "should notify multiple tickers to single notifier",
+			tick: &domain.Tick{
+				Data: map[domain.TickerName]*domain.Ticker{
+					"BTCUSDT": {
+						Symbol: "BTCUSDT",
+						Ask:    45000.00,
+						Bid:    44990.00,
+					},
+					"ETHUSDT": {
+						Symbol: "ETHUSDT",
+						Ask:    3000.00,
+						Bid:    2999.00,
+					},
+				},
+			},
+			notifierCount: 1,
+			wantEventType: domain.EventTypeTicker,
+			wantCalls:     2, // One call per ticker
+		},
+		{
+			name: "should notify single ticker to multiple notifiers",
+			tick: &domain.Tick{
+				Data: map[domain.TickerName]*domain.Ticker{
+					"BTCUSDT": {
+						Symbol: "BTCUSDT",
+						Ask:    45000.00,
+						Bid:    44990.00,
+					},
+				},
+			},
+			notifierCount: 3,
+			wantEventType: domain.EventTypeTicker,
+			wantCalls:     3, // One call per notifier
+		},
+		{
+			name: "should handle empty tick data",
+			tick: &domain.Tick{
+				Data: map[domain.TickerName]*domain.Ticker{},
+			},
+			notifierCount: 1,
+			wantEventType: domain.EventTypeTicker,
+			wantCalls:     0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup test suite
+			ts := setupTest()
+
+			// Create and configure notifier mocks
+			notifiers := make([]*notifyMock.ClientMock, tt.notifierCount)
+			for i := 0; i < tt.notifierCount; i++ {
+				notifier := &notifyMock.ClientMock{
+					SendFunc: func(ctx context.Context, event notify.Event) error {
+						// Verify event properties
+						assert.Equal(t, tt.wantEventType, event.EventType)
+						assert.NotZero(t, event.Time)
+						assert.NotNil(t, event.Data)
+						return nil
+					},
+				}
+				notifiers[i] = notifier
+				ts.importer.WithMarketNotify(notifier)
+			}
+
+			// Execute the notification
+			ts.importer.notifyNewTick(tt.tick)
+
+			// Verify the notifications
+			totalCalls := 0
+			for _, notifier := range notifiers {
+				calls := len(notifier.SendCalls())
+				totalCalls += calls
+
+				// For each call, verify the context was passed
+				for _, call := range notifier.SendCalls() {
+					assert.NotNil(t, call.Ctx)
+				}
+			}
+			assert.Equal(t, tt.wantCalls, totalCalls, "unexpected number of notification calls")
 		})
 	}
 }
