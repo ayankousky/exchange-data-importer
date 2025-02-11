@@ -13,7 +13,6 @@ import (
 
 	"github.com/ayankousky/exchange-data-importer/internal/importer"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure"
-	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/db"
 	binanceExchange "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/binance"
 	bybitExchange "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/bybit"
 	okxExchange "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/okx"
@@ -28,7 +27,7 @@ func main() {
 	defer stop()
 
 	// Create a new mongo client
-	mongoClient, err := db.NewMongoClient("mongodb://beatbet-db-mongo:27017")
+	mongoClient, err := infrastructure.NewMongoClient("mongodb://beatbet-db-mongo:27017")
 	if err != nil {
 		log.Printf("Error creating mongo client: %v", err)
 		return
