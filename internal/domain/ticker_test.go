@@ -1,10 +1,12 @@
 package domain
 
 import (
+	"testing"
+	"time"
+
 	"github.com/ayankousky/exchange-data-importer/pkg/utils"
 	"github.com/ayankousky/exchange-data-importer/pkg/utils/mathutils"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestTicker_CalculateIndicators(t *testing.T) {
@@ -51,4 +53,114 @@ func TestTicker_CalculateIndicators(t *testing.T) {
 	ticker.CalculateIndicators(history, prevTick)
 	assert.Equal(t, -7.0, ticker.Max10Diff, "Max10Diff should increase negative if ask reduced")
 	assert.Equal(t, 26.82, ticker.Min10Diff, "Min10Diff should reduce if ask reduced")
+}
+
+func TestTicker_Validate(t *testing.T) {
+	defaultDate := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name     string
+		ticker   Ticker
+		wantErr  bool
+		errField string
+	}{
+		{
+			name: "valid ticker",
+			ticker: Ticker{
+				Symbol:    "BTCUSDT",
+				EventAt:   defaultDate,
+				CreatedAt: defaultDate,
+				Ask:       50000.0,
+				Bid:       49900.0,
+				RSI20:     60.0,
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty symbol",
+			ticker: Ticker{
+				Symbol:    "",
+				EventAt:   defaultDate,
+				CreatedAt: defaultDate,
+				Ask:       50000.0,
+				Bid:       49900.0,
+			},
+			wantErr:  true,
+			errField: "Symbol",
+		},
+		{
+			name: "zero event time",
+			ticker: Ticker{
+				Symbol:    "BTCUSDT",
+				EventAt:   time.Time{},
+				CreatedAt: defaultDate,
+				Ask:       50000.0,
+				Bid:       49900.0,
+			},
+			wantErr:  true,
+			errField: "EventAt",
+		},
+		{
+			name: "zero CreatedAt time",
+			ticker: Ticker{
+				Symbol:    "BTCUSDT",
+				EventAt:   defaultDate,
+				CreatedAt: time.Time{},
+				Ask:       50000.0,
+				Bid:       49900.0,
+			},
+			wantErr:  true,
+			errField: "CreatedAt",
+		},
+		{
+			name: "negative ask price",
+			ticker: Ticker{
+				Symbol:    "BTCUSDT",
+				EventAt:   defaultDate,
+				CreatedAt: defaultDate,
+				Ask:       -50000.0,
+				Bid:       49900.0,
+			},
+			wantErr:  true,
+			errField: "Ask",
+		},
+		{
+			name: "negative bid price",
+			ticker: Ticker{
+				Symbol:    "BTCUSDT",
+				EventAt:   defaultDate,
+				CreatedAt: defaultDate,
+				Ask:       50000.0,
+				Bid:       -49900.0,
+			},
+			wantErr:  true,
+			errField: "Bid",
+		},
+		{
+			name: "bid greater than ask",
+			ticker: Ticker{
+				Symbol:    "BTCUSDT",
+				EventAt:   defaultDate,
+				CreatedAt: defaultDate,
+				Ask:       50000.0,
+				Bid:       50100.0,
+			},
+			wantErr:  true,
+			errField: "Bid/Ask",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.ticker.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+				valErr, ok := err.(ValidationError)
+				assert.True(t, ok)
+				assert.Equal(t, tt.errField, valErr.Field)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }

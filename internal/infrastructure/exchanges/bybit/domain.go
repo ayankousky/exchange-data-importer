@@ -104,6 +104,7 @@ func (bl LiquidationDTO) toLiquidation() (exchanges.Liquidation, error) {
 	liquidation.Quantity = quantity
 	liquidation.Symbol = bl.Symbol
 	liquidation.EventAt = time.Unix(0, bl.UpdatedTime*int64(time.Millisecond))
+	liquidation.TotalPrice = price * quantity
 	switch bl.Side {
 	case "Buy":
 		liquidation.Side = "SELL"

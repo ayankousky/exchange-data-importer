@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -19,11 +20,59 @@ const (
 )
 
 // Liquidation represents a market liquidation event
-// Basically liquidation is a regular order but it could have either a buy or sell side
 type Liquidation struct {
 	Order    Order     `json:"o"`
 	EventAt  time.Time `db:"et" json:"et" bson:"et"` // event could come from exchange with a delay
 	StoredAt time.Time `db:"st" json:"st" bson:"st"` // time when the event was stored in the database
+}
+
+// Validate performs validation of the Liquidation
+func (l *Liquidation) Validate() error {
+	if l.EventAt.IsZero() {
+		return ValidationError{
+			Field: "EventAt",
+			Err:   fmt.Errorf("event time cannot be zero"),
+		}
+	}
+
+	if l.StoredAt.IsZero() {
+		return ValidationError{
+			Field: "StoredAt",
+			Err:   fmt.Errorf("stored time cannot be zero"),
+		}
+	}
+
+	if err := l.Order.Validate(); err != nil {
+		return ValidationError{
+			Field: "Order",
+			Err:   err,
+		}
+	}
+
+	// Validate that Order.Side matches LiquidationType
+	switch l.Order.Side {
+	case OrderSide(LongLiquidation):
+		if l.Order.Side != OrderSideSell {
+			return ValidationError{
+				Field: "Order.Side",
+				Err:   fmt.Errorf("long liquidation must have SELL order side"),
+			}
+		}
+	case OrderSide(ShortLiquidation):
+		if l.Order.Side != OrderSideBuy {
+			return ValidationError{
+				Field: "Order.Side",
+				Err:   fmt.Errorf("short liquidation must have BUY order side"),
+			}
+		}
+	default:
+		return ValidationError{
+			Field: "Order.Side",
+			Err:   fmt.Errorf("invalid liquidation type"),
+		}
+	}
+
+	return nil
 }
 
 // LiquidationsHistory represents the liquidation history at a specific point in time

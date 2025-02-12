@@ -106,6 +106,7 @@ func (ol LiquidationDTO) toLiquidation() (exchanges.Liquidation, error) {
 	liquidation.Quantity = quantity
 	liquidation.Symbol = ol.InstID
 	liquidation.EventAt = time.Unix(0, ts*int64(time.Millisecond))
+	liquidation.TotalPrice = price * quantity
 
 	// Convert OKX-specific side to normalized format
 	switch strings.ToLower(ol.Details[0].Side) {

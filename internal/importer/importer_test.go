@@ -185,6 +185,7 @@ func TestInitHistory(t *testing.T) {
 }
 
 func TestBuildTick(t *testing.T) {
+	defaultDate := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	tests := []struct {
 		name               string
 		tickers            []exchanges.Ticker
@@ -195,8 +196,8 @@ func TestBuildTick(t *testing.T) {
 		{
 			name: "should build tick with valid tickers",
 			tickers: []exchanges.Ticker{
-				{Symbol: "BTCUSDT", AskPrice: 50000, BidPrice: 49900},
-				{Symbol: "ETHUSDT", AskPrice: 3000, BidPrice: 2990},
+				{Symbol: "BTCUSDT", AskPrice: 50000, BidPrice: 49900, EventAt: defaultDate},
+				{Symbol: "ETHUSDT", AskPrice: 3000, BidPrice: 2990, EventAt: defaultDate},
 			},
 			expectedTickersLen: 2,
 			expectedLL60:       600,

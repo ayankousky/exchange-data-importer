@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"math"
 	"time"
 
@@ -89,13 +90,50 @@ func (t *Ticker) CalculateIndicators(history *utils.RingBuffer[*Ticker], lastTic
 	}
 }
 
-// IsValid checks if the ticker has valid data
-func (t *Ticker) IsValid() bool {
-	if t == nil {
-		return false
+// Validate performs validation of the Ticker
+func (t *Ticker) Validate() error {
+	if t.Symbol == "" {
+		return ValidationError{
+			Field: "Symbol",
+			Err:   fmt.Errorf("symbol cannot be empty"),
+		}
 	}
-	if t.Ask == 0 || t.Bid == 0 {
-		return false
+
+	if t.EventAt.IsZero() {
+		return ValidationError{
+			Field: "EventAt",
+			Err:   fmt.Errorf("event time cannot be zero"),
+		}
 	}
-	return true
+
+	if t.CreatedAt.IsZero() {
+		return ValidationError{
+			Field: "CreatedAt",
+			Err:   fmt.Errorf("created time cannot be zero"),
+		}
+	}
+
+	if t.Ask <= 0 {
+		return ValidationError{
+			Field: "Ask",
+			Err:   fmt.Errorf("ask price must be greater than 0"),
+		}
+	}
+
+	if t.Bid <= 0 {
+		return ValidationError{
+			Field: "Bid",
+			Err:   fmt.Errorf("bid price must be greater than 0"),
+		}
+	}
+
+	// Validate bid is less than ask (no negative spread)
+	if t.Bid >= t.Ask {
+		return ValidationError{
+			Field: "Bid/Ask",
+			Err:   fmt.Errorf("bid price (%f) must be less than ask price (%f)", t.Bid, t.Ask),
+		}
+	}
+
+	return nil
 }

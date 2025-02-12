@@ -77,6 +77,12 @@ func (i *Importer) StartLiquidationsImport(ctx context.Context) {
 					EventAt:  liq.EventAt,
 					StoredAt: time.Now(),
 				}
+
+				if err := domainLiq.Validate(); err != nil {
+					log.Printf("Liquidation validation failed: %v", err)
+					continue
+				}
+
 				// Store it
 				err := i.liquidationRepository.Create(context.Background(), domainLiq)
 				if err != nil {
@@ -158,7 +164,11 @@ func (i *Importer) importTick(ctx context.Context) error {
 	// Build the tick using the fetched data
 	i.buildTick(ctx, newTick, fetchedTickers)
 	newTick.CreatedAt = time.Now()
-	newTick.HandlingDuration = time.Since(newTick.FetchedAt)
+	newTick.HandlingDuration = time.Since(newTick.FetchedAt).Milliseconds()
+
+	if err := newTick.Validate(); err != nil {
+		return fmt.Errorf("tick validation failed: %w", err)
+	}
 
 	i.notifyNewTick(newTick)
 
@@ -250,8 +260,8 @@ func (i *Importer) buildTicker(currTick domain.Tick, lastTick *domain.Tick, eTic
 		CreatedAt: currTick.StartAt,
 	}
 
-	if !ticker.IsValid() {
-		return nil, fmt.Errorf("invalid ticker data: %v", ticker)
+	if err := ticker.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid ticker data: %v", err)
 	}
 
 	i.addTickerHistory(ticker)

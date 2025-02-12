@@ -98,6 +98,7 @@ func (bl LiquidationDTO) toLiquidation() (exchanges.Liquidation, error) {
 	liquidation.Symbol = bl.OrderData.Symbol
 	liquidation.EventAt = time.Unix(0, bl.EventTime*int64(time.Millisecond))
 	liquidation.Side = bl.OrderData.Side
+	liquidation.TotalPrice = priceF * quantityF
 
 	return liquidation, nil
 }

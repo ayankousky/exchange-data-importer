@@ -2,6 +2,7 @@ package domain
 
 import (
 	"testing"
+	"time"
 
 	"github.com/ayankousky/exchange-data-importer/pkg/utils"
 	"github.com/ayankousky/exchange-data-importer/pkg/utils/mathutils"
@@ -67,4 +68,109 @@ func TestCalculateIndicators(t *testing.T) {
 	currentTick.Data["BTCUSDT"].Ask /= 100
 	currentTick.CalculateIndicators(history)
 	assert.Equal(t, -0.26, currentTick.Avg.AskChange, "Cover the case when diff more than 1% BidChange")
+}
+
+func TestTick_Validate(t *testing.T) {
+	defaultDate := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	validTicker := &Ticker{
+		Symbol:    "BTCUSDT",
+		EventAt:   defaultDate,
+		CreatedAt: defaultDate,
+		Ask:       50000.0,
+		Bid:       49900.0,
+		RSI20:     60.0,
+	}
+
+	tests := []struct {
+		name     string
+		tick     Tick
+		wantErr  bool
+		errField string
+	}{
+		{
+			name: "valid tick",
+			tick: Tick{
+				StartAt:          defaultDate,
+				FetchedAt:        defaultDate.Add(time.Millisecond * 100),
+				CreatedAt:        defaultDate.Add(time.Millisecond * 200),
+				FetchDuration:    100,
+				HandlingDuration: 200,
+				Data: map[TickerName]*Ticker{
+					"BTCUSDT": validTicker,
+				},
+				Avg: TickAvg{
+					TickersCount: 1,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "zero startAt time",
+			tick: Tick{
+				StartAt:          time.Time{},
+				FetchedAt:        defaultDate,
+				CreatedAt:        defaultDate,
+				FetchDuration:    100,
+				HandlingDuration: 200,
+				Data: map[TickerName]*Ticker{
+					"BTCUSDT": validTicker,
+				},
+				Avg: TickAvg{
+					TickersCount: 1,
+				},
+			},
+			wantErr:  true,
+			errField: "StartAt",
+		},
+		{
+			name: "zero fetchedAt time",
+			tick: Tick{
+				StartAt:          defaultDate,
+				FetchedAt:        time.Time{},
+				CreatedAt:        defaultDate,
+				FetchDuration:    100,
+				HandlingDuration: 200,
+				Data: map[TickerName]*Ticker{
+					"BTCUSDT": validTicker,
+				},
+				Avg: TickAvg{
+					TickersCount: 1,
+				},
+			},
+			wantErr:  true,
+			errField: "FetchedAt",
+		},
+		{
+			name: "zero CreatedAt time",
+			tick: Tick{
+				StartAt:          defaultDate,
+				FetchedAt:        defaultDate,
+				CreatedAt:        time.Time{},
+				FetchDuration:    100,
+				HandlingDuration: 200,
+				Data: map[TickerName]*Ticker{
+					"BTCUSDT": validTicker,
+				},
+				Avg: TickAvg{
+					TickersCount: 1,
+				},
+			},
+			wantErr:  true,
+			errField: "CreatedAt",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.tick.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+				valErr, ok := err.(ValidationError)
+				assert.True(t, ok)
+				assert.Equal(t, tt.errField, valErr.Field)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }

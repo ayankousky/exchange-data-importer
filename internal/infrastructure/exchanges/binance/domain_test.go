@@ -132,17 +132,19 @@ func TestLiquidationDTO_ToLiquidation(t *testing.T) {
 				},
 			},
 			want: exchanges.Liquidation{
-				Symbol:   "BTCUSDT",
-				Side:     "SELL",
-				Price:    50000.50,
-				Quantity: 0.001,
-				EventAt:  time.UnixMilli(1635739200000),
+				Symbol:     "BTCUSDT",
+				Side:       "SELL",
+				Price:      50000.50,
+				Quantity:   0.001,
+				EventAt:    time.UnixMilli(1635739200000),
+				TotalPrice: 50.0005,
 			},
 			wantErr: false,
 		},
 		{
 			name: "invalid price",
 			dto: LiquidationDTO{
+				EventTime: 1635739200000,
 				OrderData: struct {
 					Symbol       string `json:"s"`
 					Side         string `json:"S"`

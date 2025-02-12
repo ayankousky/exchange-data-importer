@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/ayankousky/exchange-data-importer/pkg/utils"
@@ -23,8 +24,8 @@ type Tick struct {
 	FetchedAt time.Time `db:"fetched_at" json:"fetched_at" bson:"fetched_at"` // fetched from exchange at
 	CreatedAt time.Time `db:"created_at" json:"created_at" bson:"created_at"` // ready to be stored at
 
-	FetchDuration    int64         `db:"fetch_duration" json:"fetch_duration" bson:"fetch_duration"`
-	HandlingDuration time.Duration `db:"handling_duration" json:"handling_duration" bson:"handling_duration"`
+	FetchDuration    int64 `db:"fetch_duration" json:"fetch_duration" bson:"fetch_duration"`
+	HandlingDuration int64 `db:"handling_duration" json:"handling_duration" bson:"handling_duration"`
 
 	AvgBuy10 float64 `db:"tick_avg_buy_open" json:"tick_avg_buy_open" bson:"tick_avg_buy_open"`
 	LL1      int64   `db:"ll_1" json:"ll_1" bson:"ll_1"`    // 1s second total long liquidations
@@ -107,4 +108,30 @@ func (t *Tick) CalculateIndicators(history *utils.RingBuffer[*Tick]) {
 // SetTicker sets a ticker in the tick snapshot
 func (t *Tick) SetTicker(ticker *Ticker) {
 	t.Data[ticker.Symbol] = ticker
+}
+
+// Validate performs validation of the Tick
+func (t *Tick) Validate() error {
+	if t.StartAt.IsZero() {
+		return ValidationError{
+			Field: "StartAt",
+			Err:   fmt.Errorf("start time cannot be zero"),
+		}
+	}
+
+	if t.FetchedAt.IsZero() {
+		return ValidationError{
+			Field: "FetchedAt",
+			Err:   fmt.Errorf("fetched time cannot be zero"),
+		}
+	}
+
+	if t.CreatedAt.IsZero() {
+		return ValidationError{
+			Field: "CreatedAt",
+			Err:   fmt.Errorf("created time cannot be zero"),
+		}
+	}
+
+	return nil
 }
