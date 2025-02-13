@@ -86,11 +86,18 @@ func (bc *Client) FetchTickers(ctx context.Context) ([]exchanges.Ticker, error) 
 	}
 
 	var binanceTickers []TickerDTO
-	if err := json.NewDecoder(resp.Body).Decode(&binanceTickers); err != nil {
+	err = json.NewDecoder(resp.Body).Decode(&binanceTickers)
+	if err != nil {
 		return nil, fmt.Errorf("decoding response from %s: %w", url, err)
 	}
 
-	return convertTickers(binanceTickers), nil
+	// Validate tickers against market data
+	filteredTickers, err := FilterTickers(binanceTickers)
+	if err != nil {
+		return nil, fmt.Errorf("validating market data: %w", err)
+	}
+
+	return convertTickers(filteredTickers), nil
 }
 
 // convertTickers converts Binance-specific ticker DTOs to normalized tickers
