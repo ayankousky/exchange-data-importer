@@ -16,8 +16,9 @@ import (
 	binanceExchange "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/binance"
 	bybitExchange "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/bybit"
 	okxExchange "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/okx"
-	redisNotificator "github.com/ayankousky/exchange-data-importer/internal/infrastructure/notify"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/repository/mongo"
+
+	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/notify"
 )
 
 func main() {
@@ -48,6 +49,12 @@ func main() {
 		return
 	}
 
+	tgNotifier, err := notify.NewTelegramNotifier(os.Getenv("TELEGRAM_BOT_TOKEN"), os.Getenv("TELEGRAM_CHAT_ID"))
+	if err != nil {
+		log.Printf("Error creating telegram notifier: %v", err)
+		return
+	}
+
 	binanceClient := binanceExchange.NewBinance(binanceExchange.Config{
 		APIUrl:     binanceExchange.FuturesAPIURL,
 		WSUrl:      binanceExchange.FuturesWSUrl,
@@ -55,7 +62,8 @@ func main() {
 		Name:       "binance",
 	})
 	binanceImporter := importer.NewImporter(binanceClient, mongoFactory)
-	binanceImporter.WithMarketNotify(redisNotificator.NewRedisNotifier(redisClient, fmt.Sprintf("exchange:%s:market", binanceClient.GetName())))
+	binanceImporter.WithMarketNotify(notify.NewRedisNotifier(redisClient, fmt.Sprintf("exchange:%s:market", binanceClient.GetName())))
+	binanceImporter.WithAlertNotify(tgNotifier)
 	importers = append(importers, binanceImporter)
 
 	bybitClient := bybitExchange.NewBybit(bybitExchange.Config{

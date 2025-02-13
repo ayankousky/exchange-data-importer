@@ -28,6 +28,7 @@ type Importer struct {
 	liquidationRepository domain.LiquidationRepository
 
 	marketNotifiers []notify.Client
+	alertNotifiers  []notify.Client
 
 	tickHistory   *utils.RingBuffer[*domain.Tick]
 	tickerHistory map[domain.TickerName]*utils.RingBuffer[*domain.Ticker]
