@@ -61,11 +61,11 @@ func setupTest() *testSuite {
 	}
 
 	repoFactory := &importerMocks.RepositoryFactoryMock{
-		GetTickRepositoryFunc: func(name string) domain.TickRepository {
-			return tickRepo
+		GetTickRepositoryFunc: func(name string) (domain.TickRepository, error) {
+			return tickRepo, nil
 		},
-		GetLiquidationRepositoryFunc: func(name string) domain.LiquidationRepository {
-			return liqRepo
+		GetLiquidationRepositoryFunc: func(name string) (domain.LiquidationRepository, error) {
+			return liqRepo, nil
 		},
 	}
 

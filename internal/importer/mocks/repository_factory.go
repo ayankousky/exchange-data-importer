@@ -14,10 +14,10 @@ import (
 //
 //		// make and configure a mocked importer.RepositoryFactory
 //		mockedRepositoryFactory := &RepositoryFactoryMock{
-//			GetLiquidationRepositoryFunc: func(name string) domain.LiquidationRepository {
+//			GetLiquidationRepositoryFunc: func(name string) (domain.LiquidationRepository, error) {
 //				panic("mock out the GetLiquidationRepository method")
 //			},
-//			GetTickRepositoryFunc: func(name string) domain.TickRepository {
+//			GetTickRepositoryFunc: func(name string) (domain.TickRepository, error) {
 //				panic("mock out the GetTickRepository method")
 //			},
 //		}
@@ -28,10 +28,10 @@ import (
 //	}
 type RepositoryFactoryMock struct {
 	// GetLiquidationRepositoryFunc mocks the GetLiquidationRepository method.
-	GetLiquidationRepositoryFunc func(name string) domain.LiquidationRepository
+	GetLiquidationRepositoryFunc func(name string) (domain.LiquidationRepository, error)
 
 	// GetTickRepositoryFunc mocks the GetTickRepository method.
-	GetTickRepositoryFunc func(name string) domain.TickRepository
+	GetTickRepositoryFunc func(name string) (domain.TickRepository, error)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -51,7 +51,7 @@ type RepositoryFactoryMock struct {
 }
 
 // GetLiquidationRepository calls GetLiquidationRepositoryFunc.
-func (mock *RepositoryFactoryMock) GetLiquidationRepository(name string) domain.LiquidationRepository {
+func (mock *RepositoryFactoryMock) GetLiquidationRepository(name string) (domain.LiquidationRepository, error) {
 	if mock.GetLiquidationRepositoryFunc == nil {
 		panic("RepositoryFactoryMock.GetLiquidationRepositoryFunc: method is nil but RepositoryFactory.GetLiquidationRepository was just called")
 	}
@@ -90,7 +90,7 @@ func (mock *RepositoryFactoryMock) ResetGetLiquidationRepositoryCalls() {
 }
 
 // GetTickRepository calls GetTickRepositoryFunc.
-func (mock *RepositoryFactoryMock) GetTickRepository(name string) domain.TickRepository {
+func (mock *RepositoryFactoryMock) GetTickRepository(name string) (domain.TickRepository, error) {
 	if mock.GetTickRepositoryFunc == nil {
 		panic("RepositoryFactoryMock.GetTickRepositoryFunc: method is nil but RepositoryFactory.GetTickRepository was just called")
 	}

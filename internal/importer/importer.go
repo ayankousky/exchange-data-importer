@@ -17,8 +17,8 @@ import (
 
 // RepositoryFactory is a contract for creating repositories
 type RepositoryFactory interface {
-	GetTickRepository(name string) domain.TickRepository
-	GetLiquidationRepository(name string) domain.LiquidationRepository
+	GetTickRepository(name string) (domain.TickRepository, error)
+	GetLiquidationRepository(name string) (domain.LiquidationRepository, error)
 }
 
 // Importer is responsible for importing data from an exchange and storing it in the database
@@ -37,12 +37,23 @@ type Importer struct {
 
 // NewImporter creates a new Importer
 func NewImporter(exchange exchanges.Exchange, repositoryFactory RepositoryFactory) *Importer {
+	tickRepository, err := repositoryFactory.GetTickRepository(exchange.GetName())
+	if err != nil {
+		log.Printf("Error creating tick repository: %v", err)
+		return nil
+	}
+	liquidationRepository, err := repositoryFactory.GetLiquidationRepository(exchange.GetName())
+	if err != nil {
+		log.Printf("Error creating liquidation repository: %v", err)
+		return nil
+	}
 	return &Importer{
 		exchange:              exchange,
-		tickRepository:        repositoryFactory.GetTickRepository(exchange.GetName()),
-		liquidationRepository: repositoryFactory.GetLiquidationRepository(exchange.GetName()),
+		tickRepository:        tickRepository,
+		liquidationRepository: liquidationRepository,
 
 		marketNotifiers: make([]notify.Client, 0),
+		alertNotifiers:  make([]notify.Client, 0),
 
 		tickerHistory: make(map[domain.TickerName]*utils.RingBuffer[*domain.Ticker]),
 		tickHistory:   utils.NewRingBuffer[*domain.Tick](domain.MaxTickHistory),

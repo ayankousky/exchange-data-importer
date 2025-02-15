@@ -2,7 +2,7 @@ package mongo
 
 import (
 	"context"
-	"log"
+	"fmt"
 
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -19,7 +19,7 @@ func NewMongoRepoFactory(client *mongo.Client) (*Factory, error) {
 }
 
 // GetTickRepository returns a new TickRepository
-func (f *Factory) GetTickRepository(name string) domain.TickRepository {
+func (f *Factory) GetTickRepository(name string) (domain.TickRepository, error) {
 	db := f.client.Database("exchange").Collection(name + "_tick")
 
 	// create required indexes
@@ -27,17 +27,17 @@ func (f *Factory) GetTickRepository(name string) domain.TickRepository {
 		Keys: map[string]interface{}{"created_at": 1},
 	})
 	if err != nil {
-		log.Printf("Error creating index: %v", err)
+		return nil, fmt.Errorf("error creating index for tick repository: %w", err)
 	}
 
-	return &Tick{db: db}
+	return &Tick{db: db}, nil
 }
 
 // GetLiquidationRepository returns a new LiquidationRepository
-func (f *Factory) GetLiquidationRepository(name string) domain.LiquidationRepository {
+func (f *Factory) GetLiquidationRepository(name string) (domain.LiquidationRepository, error) {
 	repo, err := NewLiquidationRepository(f.client.Database("exchange").Collection(name + "_liquidation"))
 	if err != nil {
-		log.Printf("Error creating liquidation repository: %v", err)
+		return nil, fmt.Errorf("error creating liquidation repository: %w", err)
 	}
-	return repo
+	return repo, nil
 }
