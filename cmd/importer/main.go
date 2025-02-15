@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,26 +16,31 @@ import (
 	bybitExchange "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/bybit"
 	okxExchange "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/okx"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/repository/mongo"
+	"go.uber.org/zap"
 
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/notify"
 )
 
 func main() {
-	log.Printf("Starting importer...")
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Create a new logger
+	logger, _ := infrastructure.NewLogger("development", "importer")
+	defer logger.Sync()
+
+	logger.Info("Starting importer...")
 
 	// Create a new mongo client
 	mongoClient, err := infrastructure.NewMongoClient("mongodb://beatbet-db-mongo:27017")
 	if err != nil {
-		log.Printf("Error creating mongo client: %v", err)
+		logger.Error("Error creating mongo client", zap.Error(err))
 		return
 	}
 
 	mongoFactory, err := mongo.NewMongoRepoFactory(mongoClient)
 	if err != nil {
-		log.Printf("Error creating mongo factory: %v", err)
+		logger.Error("Error creating mongo factory", zap.Error(err))
 		return
 	}
 
@@ -45,13 +49,13 @@ func main() {
 
 	redisClient, err := infrastructure.NewRedisClient(ctx, "redis://beatbet-redis:6379", 1)
 	if err != nil {
-		log.Printf("Error creating redis client: %v", err)
+		logger.Error("Error creating redis client", zap.Error(err))
 		return
 	}
 
 	tgNotifier, err := notify.NewTelegramNotifier(os.Getenv("TELEGRAM_BOT_TOKEN"), os.Getenv("TELEGRAM_CHAT_ID"))
 	if err != nil {
-		log.Printf("Error creating telegram notifier: %v", err)
+		logger.Error("Error creating telegram notifier", zap.Error(err))
 		return
 	}
 
@@ -61,7 +65,7 @@ func main() {
 		HTTPClient: &http.Client{Timeout: 5 * time.Second},
 		Name:       "binance",
 	})
-	binanceImporter := importer.NewImporter(binanceClient, mongoFactory)
+	binanceImporter := importer.NewImporter(binanceClient, mongoFactory, logger)
 	binanceImporter.WithMarketNotify(notify.NewRedisNotifier(redisClient, fmt.Sprintf("exchange:%s:market", binanceClient.GetName())))
 	binanceImporter.WithAlertNotify(tgNotifier)
 	importers = append(importers, binanceImporter)
@@ -72,7 +76,7 @@ func main() {
 		HTTPClient: &http.Client{Timeout: 5 * time.Second},
 		Name:       "bybit",
 	})
-	importers = append(importers, importer.NewImporter(bybitClient, mongoFactory))
+	importers = append(importers, importer.NewImporter(bybitClient, mongoFactory, logger))
 
 	okxClient := okxExchange.NewOKX(okxExchange.Config{
 		APIUrl:     okxExchange.FuturesAPIURL,
@@ -80,7 +84,7 @@ func main() {
 		HTTPClient: &http.Client{Timeout: 5 * time.Second},
 		Name:       "okx",
 	})
-	importers = append(importers, importer.NewImporter(okxClient, mongoFactory))
+	importers = append(importers, importer.NewImporter(okxClient, mongoFactory, logger))
 	importers = importers[:1] // temporary use only binance
 
 	var wg sync.WaitGroup
@@ -90,7 +94,7 @@ func main() {
 		go func(i *importer.Importer) {
 			defer wg.Done()
 			if err := i.StartImportLoop(ctx, time.Second); err != nil {
-				log.Printf("Error starting import loop: %v", err)
+				logger.Error("Error starting import loop", zap.Error(err))
 			}
 		}(i)
 	}
@@ -102,5 +106,5 @@ func main() {
 	}()
 
 	<-ctx.Done()
-	log.Printf("Exiting...")
+	logger.Info("Exiting...")
 }

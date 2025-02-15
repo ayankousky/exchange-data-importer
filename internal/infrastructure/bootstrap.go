@@ -3,12 +3,12 @@ package infrastructure
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.uber.org/zap"
 )
 
 // NewRedisClient creates a new Redis client to inject into the other services
@@ -45,6 +45,19 @@ func NewMongoClient(uri string) (*mongo.Client, error) {
 		return nil, fmt.Errorf("mongo.Ping failed: %w", err)
 	}
 
-	log.Println("Connected to MongoDB")
 	return client, nil
+}
+
+// NewLogger creates a new logger to inject into the other services
+func NewLogger(env, service string) (*zap.Logger, error) {
+	logger, _ := zap.NewProduction(zap.Fields(
+		zap.String("env", env),
+		zap.String("service", service),
+	))
+
+	if env == "" || env == "development" {
+		logger, _ = zap.NewDevelopment()
+	}
+
+	return logger, nil
 }

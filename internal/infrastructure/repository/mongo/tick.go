@@ -3,7 +3,6 @@ package mongo
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
@@ -21,8 +20,7 @@ type Tick struct {
 func (r *Tick) Create(ctx context.Context, tick domain.Tick) error {
 	_, err := r.db.InsertOne(ctx, tick)
 	if err != nil {
-		log.Default().Printf("Error inserting tick snapshot: %v", err)
-
+		return fmt.Errorf("error inserting tick snapshot: %w", err)
 	}
 
 	return nil

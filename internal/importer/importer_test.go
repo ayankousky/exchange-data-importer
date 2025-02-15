@@ -14,6 +14,7 @@ import (
 	notifyMock "github.com/ayankousky/exchange-data-importer/internal/infrastructure/notify/mocks"
 	"github.com/ayankousky/exchange-data-importer/pkg/utils/mathutils"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 )
 
 type testSuite struct {
@@ -74,7 +75,7 @@ func setupTest() *testSuite {
 		repoFactory: repoFactory,
 		tickRepo:    tickRepo,
 		liqRepo:     liqRepo,
-		importer:    NewImporter(exchange, repoFactory),
+		importer:    NewImporter(exchange, repoFactory, zap.NewNop()),
 	}
 }
 

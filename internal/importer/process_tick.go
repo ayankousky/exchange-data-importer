@@ -3,13 +3,13 @@ package importer
 import (
 	"context"
 	"fmt"
-	"log"
 	"runtime"
 	"sync"
 	"time"
 
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges"
+	"go.uber.org/zap"
 )
 
 func (i *Importer) importTick(ctx context.Context) error {
@@ -65,7 +65,7 @@ func (i *Importer) buildTick(ctx context.Context, tick *domain.Tick, eTickers []
 	// Set liquidations data
 	liquidationsHistory, err := i.liquidationRepository.GetLiquidationsHistory(ctx, tick.StartAt)
 	if err != nil {
-		log.Printf("Error getting liquidations history: %v", err)
+		i.logger.Error("Error getting liquidations history", zap.Error(err))
 	}
 	tick.LL1 = liquidationsHistory.LongLiquidations1s
 	tick.LL2 = liquidationsHistory.LongLiquidations2s
@@ -83,13 +83,14 @@ func (i *Importer) buildTick(ctx context.Context, tick *domain.Tick, eTickers []
 	worker := func(tasks <-chan exchanges.Ticker, results chan<- *domain.Ticker) {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("Worker panic: %v\n", r)
+				i.logger.Error("Worker panic", zap.Any("panic", r))
 			}
 		}()
 
 		for exchangeTicker := range tasks {
 			ticker, err := i.buildTicker(*tick, lastTick, exchangeTicker)
 			if err != nil {
+				i.logger.Error("Error building ticker", zap.Error(err))
 				continue
 			}
 			results <- ticker

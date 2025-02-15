@@ -3,7 +3,6 @@ package importer
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/notify"
 	"github.com/ayankousky/exchange-data-importer/pkg/utils"
+	"go.uber.org/zap"
 )
 
 //go:generate moq --out mocks/repository_factory.go --pkg mocks --with-resets --skip-ensure . RepositoryFactory
@@ -23,40 +23,38 @@ type RepositoryFactory interface {
 
 // Importer is responsible for importing data from an exchange and storing it in the database
 type Importer struct {
-	exchange              exchanges.Exchange
+	exchange exchanges.Exchange
+	logger   *zap.Logger
+
 	tickRepository        domain.TickRepository
 	liquidationRepository domain.LiquidationRepository
+	tickHistory           *utils.RingBuffer[*domain.Tick]
+	tickerHistory         map[domain.TickerName]*utils.RingBuffer[*domain.Ticker]
 
 	marketNotifiers []notify.Client
 	alertNotifiers  []notify.Client
 
-	tickHistory   *utils.RingBuffer[*domain.Tick]
-	tickerHistory map[domain.TickerName]*utils.RingBuffer[*domain.Ticker]
-	tickerMutex   sync.Mutex
+	tickerMutex sync.Mutex
 }
 
 // NewImporter creates a new Importer
-func NewImporter(exchange exchanges.Exchange, repositoryFactory RepositoryFactory) *Importer {
+func NewImporter(exchange exchanges.Exchange, repositoryFactory RepositoryFactory, logger *zap.Logger) *Importer {
 	tickRepository, err := repositoryFactory.GetTickRepository(exchange.GetName())
 	if err != nil {
-		log.Printf("Error creating tick repository: %v", err)
 		return nil
 	}
 	liquidationRepository, err := repositoryFactory.GetLiquidationRepository(exchange.GetName())
 	if err != nil {
-		log.Printf("Error creating liquidation repository: %v", err)
 		return nil
 	}
 	return &Importer{
-		exchange:              exchange,
+		exchange: exchange,
+		logger:   logger,
+
 		tickRepository:        tickRepository,
 		liquidationRepository: liquidationRepository,
-
-		marketNotifiers: make([]notify.Client, 0),
-		alertNotifiers:  make([]notify.Client, 0),
-
-		tickerHistory: make(map[domain.TickerName]*utils.RingBuffer[*domain.Ticker]),
-		tickHistory:   utils.NewRingBuffer[*domain.Tick](domain.MaxTickHistory),
+		tickerHistory:         make(map[domain.TickerName]*utils.RingBuffer[*domain.Ticker]),
+		tickHistory:           utils.NewRingBuffer[*domain.Tick](domain.MaxTickHistory),
 	}
 }
 
@@ -64,7 +62,7 @@ func NewImporter(exchange exchanges.Exchange, repositoryFactory RepositoryFactor
 func (i *Importer) StartLiquidationsImport(ctx context.Context) {
 	liqChan, errChan := i.exchange.SubscribeLiquidations(ctx)
 	if liqChan == nil || errChan == nil {
-		log.Printf("Failed to subscribe to liquidations for exchange %s\n", i.exchange.GetName())
+		i.logger.Error("Failed to subscribe to liquidations", zap.String("exchange", i.exchange.GetName()))
 		return
 	}
 
@@ -72,7 +70,7 @@ func (i *Importer) StartLiquidationsImport(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				fmt.Println("Liquidation import stopped (context canceled).")
+				i.logger.Info("Liquidation import stopped (context canceled).")
 				return
 			case liq := <-liqChan:
 				// Convert the `exchanges.Liquidation` to your domain model
@@ -90,17 +88,17 @@ func (i *Importer) StartLiquidationsImport(ctx context.Context) {
 				}
 
 				if err := domainLiq.Validate(); err != nil {
-					log.Printf("Liquidation validation failed: %v", err)
+					i.logger.Error("Liquidation validation failed", zap.Error(err))
 					continue
 				}
 
 				// Store it
 				err := i.liquidationRepository.Create(context.Background(), domainLiq)
 				if err != nil {
-					fmt.Printf("Failed storing liquidation: %v\n", err)
+					i.logger.Error("Failed to store liquidation", zap.Error(err))
 				}
 			case err := <-errChan:
-				fmt.Printf("Error on liquidation stream: %v\n", err)
+				i.logger.Error("Error on liquidation stream", zap.Error(err))
 			}
 		}
 	}()
@@ -125,12 +123,12 @@ func (i *Importer) StartImportLoop(ctx context.Context, interval time.Duration) 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("Context canceled, stopping import loop...")
+			i.logger.Info("Context canceled, stopping import loop...")
 			return ctx.Err()
 		case <-timeTicker.C:
 			// Attempt to import a single "tick" of data
 			if err := i.importTick(ctx); err != nil {
-				log.Printf("Error importing tick (continuing loop): %v", err)
+				i.logger.Error("Error importing tick", zap.Error(err))
 			}
 		}
 	}

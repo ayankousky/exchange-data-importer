@@ -2,11 +2,11 @@ package importer
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/notify"
+	"go.uber.org/zap"
 )
 
 var tgAlertThresholds = domain.TickAlertThresholds{
@@ -18,7 +18,7 @@ var tgAlertThresholds = domain.TickAlertThresholds{
 // WithMarketNotify adds a new publisher to the list of marketNotifiers
 func (i *Importer) WithMarketNotify(notifier notify.Client) {
 	if notifier == nil {
-		log.Printf("Cannot add nil notifier to market notifiers")
+		i.logger.Warn("Cannot add nil notifier to market notifiers")
 		return
 	}
 	i.marketNotifiers = append(i.marketNotifiers, notifier)
@@ -27,7 +27,7 @@ func (i *Importer) WithMarketNotify(notifier notify.Client) {
 // WithAlertNotify adds a new publisher to the list of alertNotifiers
 func (i *Importer) WithAlertNotify(notifier notify.Client) {
 	if notifier == nil {
-		log.Printf("Cannot add nil notifier to alert notifiers")
+		i.logger.Warn("Cannot add nil notifier to alert notifiers")
 		return
 	}
 	i.alertNotifiers = append(i.alertNotifiers, notifier)
@@ -40,7 +40,7 @@ func (i *Importer) notifyNewTick(tick *domain.Tick) {
 		for tickerName := range tick.Data {
 			tickerNotification, err := domain.NewTickerNotification(tick, tickerName)
 			if err != nil {
-				log.Printf("Failed to create ticker notification: %v", err)
+				i.logger.Error("Failed to create ticker notification", zap.Error(err))
 				continue
 			}
 
@@ -51,7 +51,7 @@ func (i *Importer) notifyNewTick(tick *domain.Tick) {
 			}
 
 			if err := publisher.Send(context.Background(), event); err != nil {
-				log.Printf("Failed to publish tick: %v", err)
+				i.logger.Error("Failed to publish tick", zap.Error(err))
 			}
 		}
 	}
@@ -67,7 +67,7 @@ func (i *Importer) notifyNewTick(tick *domain.Tick) {
 			}
 
 			if err := publisher.Send(context.Background(), event); err != nil {
-				log.Printf("Failed to publish alert: %v", err)
+				i.logger.Error("Failed to publish alert", zap.Error(err))
 			}
 		}
 	}
