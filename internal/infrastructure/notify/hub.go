@@ -78,3 +78,15 @@ func (h *NotificationHub) GetSubscriberCount(topic string) int {
 	defer h.mu.RUnlock()
 	return len(h.subscribers[clientTopic(topic)])
 }
+
+// GetTotalSubscriberCount returns the total number of subscribers across all topics
+func (h *NotificationHub) GetTotalSubscriberCount() int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	total := 0
+	for _, clients := range h.subscribers {
+		total += len(clients)
+	}
+	return total
+}

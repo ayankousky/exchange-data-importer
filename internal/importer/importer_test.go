@@ -312,7 +312,7 @@ func TestNotifyNewTick(t *testing.T) {
 					},
 				}
 				notifiers[i] = notifier
-				ts.importer.WithMarketNotify(notifier)
+				ts.importer.WithNotifier(notifier, domain.MarketDataTopic)
 			}
 
 			// Execute the notification

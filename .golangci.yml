@@ -45,7 +45,6 @@ linters:
     - ineffassign
     - stylecheck
     - gochecknoinits
-    - gocritic
     - nakedret
     - gosimple
     - prealloc

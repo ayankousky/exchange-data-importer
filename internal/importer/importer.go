@@ -59,12 +59,27 @@ func NewImporter(exchange exchanges.Exchange, repositoryFactory RepositoryFactor
 	}
 }
 
+// Start starts a loop that imports data from the exchange periodically.
+func (i *Importer) Start(ctx context.Context) error {
+	if err := i.startLiquidationsImport(ctx); err != nil {
+		return fmt.Errorf("failed to start liquidations import: %w", err)
+	}
+	if err := i.startTickersImport(ctx); err != nil {
+		return fmt.Errorf("failed to start tickers import: %w", err)
+	}
+
+	return nil
+}
+
+// LiquidationsImportOptions contains options for importing liquidations
+type LiquidationsImportOptions struct{}
+
 // StartLiquidationsImport starts importing liquidations from the exchange
-func (i *Importer) StartLiquidationsImport(ctx context.Context) {
+func (i *Importer) startLiquidationsImport(ctx context.Context) error {
 	liqChan, errChan := i.exchange.SubscribeLiquidations(ctx)
 	if liqChan == nil || errChan == nil {
 		i.logger.Error("Failed to subscribe to liquidations", zap.String("exchange", i.exchange.GetName()))
-		return
+		return fmt.Errorf("failed to subscribe to liquidations")
 	}
 
 	go func() {
@@ -103,11 +118,14 @@ func (i *Importer) StartLiquidationsImport(ctx context.Context) {
 			}
 		}
 	}()
+	return nil
 }
 
-// StartImportLoop starts a loop that imports data from the exchange periodically.
-func (i *Importer) StartImportLoop(ctx context.Context, interval time.Duration) error {
-	i.StartLiquidationsImport(ctx)
+// StartTickersImport starts a loop that imports data from the exchange periodically.
+func (i *Importer) startTickersImport(ctx context.Context) error {
+
+	interval := time.Second // temporary here, should be configurable later
+
 	// Initialize the history data for calculating tick indicators
 	if err := i.initHistory(ctx); err != nil {
 		return fmt.Errorf("failed to init history: %w", err)
@@ -121,6 +139,8 @@ func (i *Importer) StartImportLoop(ctx context.Context, interval time.Duration) 
 	// Start the import loop with the specified interval
 	timeTicker := time.NewTicker(interval)
 	defer timeTicker.Stop()
+
+	i.logger.Info(i.getInfo())
 	for {
 		select {
 		case <-ctx.Done():
@@ -133,4 +153,18 @@ func (i *Importer) StartImportLoop(ctx context.Context, interval time.Duration) 
 			}
 		}
 	}
+}
+
+// GetInfo returns a string with the current state of the Importer
+func (i *Importer) getInfo() string {
+	var info string
+	info += "\n________________________________________________________________________________\n"
+	info += fmt.Sprintf("Exchange: %s\n", i.exchange.GetName())
+	info += fmt.Sprintf("Tick history length: %d\n", i.tickHistory.Len())
+
+	totalSubscribersCount := i.notificationHub.GetTotalSubscriberCount()
+	info += fmt.Sprintf("Total subscribers: %d\n", totalSubscribersCount)
+	info += "________________________________________________________________________________\n"
+
+	return info
 }
