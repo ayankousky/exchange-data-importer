@@ -31,8 +31,7 @@ type Importer struct {
 	tickHistory           *utils.RingBuffer[*domain.Tick]
 	tickerHistory         map[domain.TickerName]*utils.RingBuffer[*domain.Ticker]
 
-	marketNotifiers []notify.Client
-	alertNotifiers  []notify.Client
+	notificationHub *notify.NotificationHub
 
 	tickerMutex sync.Mutex
 }
@@ -50,6 +49,8 @@ func NewImporter(exchange exchanges.Exchange, repositoryFactory RepositoryFactor
 	return &Importer{
 		exchange: exchange,
 		logger:   logger,
+
+		notificationHub: notify.NewNotificationHub(logger),
 
 		tickRepository:        tickRepository,
 		liquidationRepository: liquidationRepository,

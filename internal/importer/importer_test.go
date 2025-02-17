@@ -265,7 +265,7 @@ func TestNotifyNewTick(t *testing.T) {
 				},
 			},
 			notifierCount: 1,
-			wantEventType: domain.EventTypeTicker,
+			wantEventType: domain.MarketDataTopic,
 			wantCalls:     2, // One call per ticker
 		},
 		{
@@ -280,7 +280,7 @@ func TestNotifyNewTick(t *testing.T) {
 				},
 			},
 			notifierCount: 3,
-			wantEventType: domain.EventTypeTicker,
+			wantEventType: domain.MarketDataTopic,
 			wantCalls:     3, // One call per notifier
 		},
 		{
@@ -289,7 +289,7 @@ func TestNotifyNewTick(t *testing.T) {
 				Data: map[domain.TickerName]*domain.Ticker{},
 			},
 			notifierCount: 1,
-			wantEventType: domain.EventTypeTicker,
+			wantEventType: domain.MarketDataTopic,
 			wantCalls:     0,
 		},
 	}

@@ -8,12 +8,28 @@ import (
 )
 
 const (
-	// EventTypeTicker is the event type for ticker data
-	EventTypeTicker = "TICKER"
+	// MarketDataTopic is the event type for ticker data
+	MarketDataTopic = "TICKER"
 
-	// EventTypeMarketAlert is the event triggered when something significant happens in the market
-	EventTypeMarketAlert = "ALERT_MARKET_STATE"
+	// AlertTopic is the event triggered when something significant happens in the market
+	AlertTopic = "ALERT_MARKET_STATE"
 )
+
+// TopicLevel represents a notification topic
+type TopicLevel string
+
+// Validate checks if the topic exists
+func (t TopicLevel) Validate() error {
+	switch t {
+	case MarketDataTopic, AlertTopic:
+		return nil
+	default:
+		return fmt.Errorf("invalid topic: '%s'", t)
+	}
+}
+func (t TopicLevel) String() string {
+	return string(t)
+}
 
 // TickerNotification represents a ticker notification event without excessive data
 type TickerNotification struct {

@@ -2,6 +2,7 @@ package importer
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
@@ -15,28 +16,19 @@ var tgAlertThresholds = domain.TickAlertThresholds{
 	TickerPrice1mChange: 15.0,
 }
 
-// WithMarketNotify adds a new publisher to the list of marketNotifiers
-func (i *Importer) WithMarketNotify(notifier notify.Client) {
-	if notifier == nil {
-		i.logger.Warn("Cannot add nil notifier to market notifiers")
-		return
+// WithNotifier adds a new notifier to the importer
+func (i *Importer) WithNotifier(client notify.Client, topicString string) error {
+	topic := domain.TopicLevel(topicString)
+	if err := topic.Validate(); err != nil {
+		return fmt.Errorf("invalid topic when adding notifier: %w", err)
 	}
-	i.marketNotifiers = append(i.marketNotifiers, notifier)
-}
-
-// WithAlertNotify adds a new publisher to the list of alertNotifiers
-func (i *Importer) WithAlertNotify(notifier notify.Client) {
-	if notifier == nil {
-		i.logger.Warn("Cannot add nil notifier to alert notifiers")
-		return
-	}
-	i.alertNotifiers = append(i.alertNotifiers, notifier)
+	return i.notificationHub.Subscribe(topic.String(), client)
 }
 
 // notifyNewTick sends a notification to all services who are subscribed to market data
 func (i *Importer) notifyNewTick(tick *domain.Tick) {
 	// notify bots
-	for _, publisher := range i.marketNotifiers {
+	if i.notificationHub.GetSubscriberCount(domain.MarketDataTopic) > 0 {
 		for tickerName := range tick.Data {
 			tickerNotification, err := domain.NewTickerNotification(tick, tickerName)
 			if err != nil {
@@ -46,29 +38,24 @@ func (i *Importer) notifyNewTick(tick *domain.Tick) {
 
 			event := notify.Event{
 				Time:      time.Now(),
-				EventType: domain.EventTypeTicker,
+				EventType: domain.MarketDataTopic,
 				Data:      tickerNotification,
 			}
 
-			if err := publisher.Send(context.Background(), event); err != nil {
-				i.logger.Error("Failed to publish tick", zap.Error(err))
-			}
+			i.notificationHub.Publish(context.Background(), domain.MarketDataTopic, event)
 		}
 	}
 
 	// notify alerts
-	marketStateAlertMessage, hasAlerts := domain.FormatTickAlert(tick, tgAlertThresholds)
-	if hasAlerts {
-		for _, publisher := range i.alertNotifiers {
+	if i.notificationHub.GetSubscriberCount(domain.AlertTopic) > 0 {
+		marketStateAlertMessage, hasAlerts := domain.FormatTickAlert(tick, tgAlertThresholds)
+		if hasAlerts {
 			event := notify.Event{
 				Time:      time.Now(),
-				EventType: domain.EventTypeMarketAlert,
+				EventType: domain.AlertTopic,
 				Data:      marketStateAlertMessage,
 			}
-
-			if err := publisher.Send(context.Background(), event); err != nil {
-				i.logger.Error("Failed to publish alert", zap.Error(err))
-			}
+			i.notificationHub.Publish(context.Background(), domain.AlertTopic, event)
 		}
 	}
 

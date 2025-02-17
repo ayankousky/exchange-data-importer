@@ -53,18 +53,16 @@ type options struct {
 	} `group:"exchange" namespace:"exchange" env-namespace:"EXCHANGE"`
 
 	Notify struct {
-		Service struct {
-			Redis struct {
-				URL string `long:"url" env:"URL" description:"Redis URL"`
-			} `group:"redis" namespace:"redis" env-namespace:"REDIS"`
-		} `group:"service" namespace:"service" env-namespace:"SERVICE"`
+		Redis struct {
+			URL   string `long:"url" env:"URL" description:"Redis URL"`
+			Topic string `long:"topic" env:"TOPIC" description:"Redis topic"`
+		} `group:"redis" namespace:"redis" env-namespace:"REDIS"`
 
-		External struct {
-			Telegram struct {
-				BotToken string `long:"bot-token" env:"BOT_TOKEN" description:"Telegram bot token"`
-				ChatID   string `long:"chat-id" env:"CHAT_ID" description:"Telegram chat ID"`
-			} `group:"telegram" namespace:"telegram" env-namespace:"TELEGRAM"`
-		} `group:"external" namespace:"external" env-namespace:"EXTERNAL"`
+		Telegram struct {
+			BotToken string `long:"bot-token" env:"BOT_TOKEN" description:"Telegram bot token"`
+			ChatID   string `long:"chat-id" env:"CHAT_ID" description:"Telegram chat ID"`
+			Topic    string `long:"topic" env:"TOPIC" description:"Telegram topic"`
+		} `group:"telegram" namespace:"telegram" env-namespace:"TELEGRAM"`
 	} `group:"notify" namespace:"notify" env-namespace:"NOTIFY"`
 }
 
@@ -97,26 +95,25 @@ func main() {
 		return
 	}
 
-	serviceNotify, err := getServiceNotify(opts)
-	if err != nil {
-		logger.Warn("Error creating service notifier", zap.Error(err))
-	}
-
-	externalNotify, err := getExternalNotify(opts)
-	if err != nil {
-		logger.Warn("Error creating external notifier", zap.Error(err))
-	}
-
+	// Create exchange selected by the user
 	exchange, err := getExchange(opts)
 	if err != nil {
 		logger.Error("Error creating exchange", zap.Error(err))
 		return
 	}
 
+	// Create importer (the main service)
 	exchangeImporter := importer.NewImporter(exchange, repoFactory, logger)
-	exchangeImporter.WithMarketNotify(serviceNotify)
-	exchangeImporter.WithAlertNotify(externalNotify)
 
+	// Add notifiers to the importer
+	notifiers := getNotifiers(opts, logger)
+	for _, notifier := range notifiers {
+		if err := exchangeImporter.WithNotifier(notifier.Client, notifier.Topic); err != nil {
+			logger.Warn("Error adding notifier", zap.Error(err))
+		}
+	}
+
+	// Start handling imports
 	if err := exchangeImporter.StartImportLoop(ctx, time.Second); err != nil {
 		logger.Error("Error starting import loop", zap.Error(err))
 	}
@@ -143,25 +140,48 @@ func getRepositoryFactory(opts options) (importer.RepositoryFactory, error) {
 	return nil, fmt.Errorf("no repository factory found")
 }
 
-func getServiceNotify(opts options) (notify.Client, error) {
-	if opts.Notify.Service.Redis.URL != "" {
-		redisClient, err := infrastructure.NewRedisClient(context.Background(), opts.Notify.Service.Redis.URL, 1)
+func getNotifiers(opts options, logger *zap.Logger) []struct {
+	Client notify.Client
+	Topic  string
+} {
+	var notifiers []struct {
+		Client notify.Client
+		Topic  string
+	}
+
+	// Redis Notifier
+	if opts.Notify.Redis.URL != "" {
+		redisClient, err := infrastructure.NewRedisClient(context.Background(), opts.Notify.Redis.URL, 1)
 		if err != nil {
-			return nil, err
+			logger.Warn("Failed to initialize Redis notifier", zap.Error(err))
+		} else {
+			notifiers = append(notifiers, struct {
+				Client notify.Client
+				Topic  string
+			}{
+				Client: notify.NewRedisNotifier(redisClient, "exchange:notifications"),
+				Topic:  opts.Notify.Redis.Topic,
+			})
 		}
-
-		return notify.NewRedisNotifier(redisClient, fmt.Sprintf("exchange:%s:market", opts.Exchange.Binance.Name)), nil
 	}
 
-	return nil, fmt.Errorf("no service notifier found")
-}
-
-func getExternalNotify(opts options) (notify.Client, error) {
-	if opts.Notify.External.Telegram.BotToken != "" && opts.Notify.External.Telegram.ChatID != "" {
-		return notify.NewTelegramNotifier(opts.Notify.External.Telegram.BotToken, opts.Notify.External.Telegram.ChatID)
+	// Telegram Notifier
+	if opts.Notify.Telegram.BotToken != "" && opts.Notify.Telegram.ChatID != "" {
+		tgNotifier, err := notify.NewTelegramNotifier(opts.Notify.Telegram.BotToken, opts.Notify.Telegram.ChatID)
+		if err != nil {
+			logger.Warn("Failed to initialize Telegram notifier", zap.Error(err))
+		} else {
+			notifiers = append(notifiers, struct {
+				Client notify.Client
+				Topic  string
+			}{
+				Client: tgNotifier,
+				Topic:  opts.Notify.Telegram.Topic,
+			})
+		}
 	}
 
-	return nil, fmt.Errorf("no external notifier found")
+	return notifiers
 }
 
 func getExchange(opts options) (exchanges.Exchange, error) {
