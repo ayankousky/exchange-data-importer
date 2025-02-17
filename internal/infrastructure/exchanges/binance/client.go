@@ -52,6 +52,12 @@ func NewBinance(cfg Config) *Client {
 	if cfg.HTTPClient == nil {
 		cfg.HTTPClient = http.DefaultClient
 	}
+	if cfg.WSUrl == "" {
+		cfg.WSUrl = FuturesWSUrl
+	}
+	if cfg.APIUrl == "" {
+		cfg.APIUrl = FuturesAPIURL
+	}
 
 	return &Client{
 		name:       cfg.Name,
