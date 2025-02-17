@@ -119,5 +119,5 @@ func (i *Importer) buildTick(ctx context.Context, tick *domain.Tick, eTickers []
 
 	// Calculate tick averages
 	i.addTickHistory(tick)
-	tick.CalculateIndicators(i.tickHistory)
+	tick.CalculateIndicators(i.tickHistory.buffer)
 }

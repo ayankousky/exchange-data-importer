@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
-	"github.com/ayankousky/exchange-data-importer/pkg/utils"
 )
 
 // initHistory loads old data from repositories and populates ring buffers
@@ -32,7 +31,7 @@ func (i *Importer) addTickHistory(tick *domain.Tick) {
 
 // addTickerHistory updates the ring buffer for a particular ticker - 1 item per 1 minute
 func (i *Importer) addTickerHistory(ticker *domain.Ticker) {
-	history := i.getTickerHistory(ticker.Symbol)
+	history := i.tickerHistory.Get(ticker.Symbol)
 
 	lastTickerData, err := i.getLastTicker(ticker.Symbol)
 	// If there’s no data for this minute, push a new item
@@ -59,21 +58,8 @@ func (i *Importer) addTickerHistory(ticker *domain.Ticker) {
 	ticker.Min = lastTickerData.Min
 }
 
-func (i *Importer) getTickerHistory(tickerName domain.TickerName) *utils.RingBuffer[*domain.Ticker] {
-	// protect the map from concurrent reads
-	i.tickerMutex.Lock()
-	defer i.tickerMutex.Unlock()
-
-	history, ok := i.tickerHistory[tickerName]
-	if !ok {
-		history = utils.NewRingBuffer[*domain.Ticker](domain.MaxTickHistory)
-		i.tickerHistory[tickerName] = history
-	}
-	return history
-}
-
 func (i *Importer) getLastTicker(tickerName domain.TickerName) (*domain.Ticker, error) {
-	history := i.getTickerHistory(tickerName)
+	history := i.tickerHistory.Get(tickerName)
 	lastTicker, exists := history.Last()
 	if !exists {
 		return nil, fmt.Errorf("no ticker history found for %s", tickerName)

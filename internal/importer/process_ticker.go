@@ -21,6 +21,6 @@ func (i *Importer) buildTicker(currTick domain.Tick, lastTick *domain.Tick, eTic
 	}
 
 	i.addTickerHistory(ticker)
-	ticker.CalculateIndicators(i.getTickerHistory(ticker.Symbol), lastTick)
+	ticker.CalculateIndicators(i.tickerHistory.Get(ticker.Symbol), lastTick)
 	return ticker, nil
 }

@@ -106,7 +106,7 @@ func TestTickerHistory(t *testing.T) {
 	}
 
 	lastTicker, _ := ts.importer.getLastTicker("BTCUSDT")
-	tickerHistory := ts.importer.getTickerHistory("BTCUSDT")
+	tickerHistory := ts.importer.tickerHistory.Get("BTCUSDT")
 	lastItem, _ := tickerHistory.Last()
 
 	assert.Equal(t, 17, tickerHistory.Len(), "Only 1 ticker per minute should be stored")
@@ -125,7 +125,7 @@ func TestTickerHistory(t *testing.T) {
 		}
 		ts.importer.addTickerHistory(ticker)
 	}
-	assert.Equal(t, domain.MaxTickHistory, ts.importer.getTickerHistory("BTCUSDT").Len(), "Ticker history should be limited")
+	assert.Equal(t, domain.MaxTickHistory, ts.importer.tickerHistory.Get("BTCUSDT").Len(), "Ticker history should be limited")
 }
 
 func TestCorruptedData(t *testing.T) {
@@ -142,7 +142,7 @@ func TestCorruptedData(t *testing.T) {
 		ts.importer.addTickerHistory(ticker)
 	}
 
-	history := ts.importer.getTickerHistory("BTCUSDT")
+	history := ts.importer.tickerHistory.Get("BTCUSDT")
 	assert.Equal(t, 1, history.Len(), "Only 1 ticker per minute should be stored")
 }
 
@@ -173,10 +173,10 @@ func TestInitHistory(t *testing.T) {
 	ts.importer.initHistory(ctx)
 
 	assert.Equal(t, domain.MaxTickHistory, ts.importer.tickHistory.Len())
-	assert.Equal(t, 17, ts.importer.getTickerHistory("BTCUSDT").Len())
+	assert.Equal(t, 17, ts.importer.tickerHistory.Get("BTCUSDT").Len())
 
 	lastTick, exists := ts.importer.tickHistory.Last()
-	btcHistory := ts.importer.getTickerHistory("BTCUSDT")
+	btcHistory := ts.importer.tickerHistory.Get("BTCUSDT")
 	assert.True(t, exists)
 	assert.Equal(t, 625810.2565, lastTick.Data["BTCUSDT"].Ask)
 	assert.Equal(t, 625810.2565, btcHistory.At(btcHistory.Len()-1).Ask)

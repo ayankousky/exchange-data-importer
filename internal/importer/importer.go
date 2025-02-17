@@ -3,13 +3,11 @@ package importer
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/notify"
-	"github.com/ayankousky/exchange-data-importer/pkg/utils"
 	"go.uber.org/zap"
 )
 
@@ -23,17 +21,15 @@ type RepositoryFactory interface {
 
 // Importer is responsible for importing data from an exchange and storing it in the database
 type Importer struct {
-	exchange exchanges.Exchange
-	logger   *zap.Logger
-
+	exchange              exchanges.Exchange
 	tickRepository        domain.TickRepository
 	liquidationRepository domain.LiquidationRepository
-	tickHistory           *utils.RingBuffer[*domain.Tick]
-	tickerHistory         map[domain.TickerName]*utils.RingBuffer[*domain.Ticker]
+
+	tickHistory   *tickHistory
+	tickerHistory *tickerHistoryMap
 
 	notificationHub *notify.NotificationHub
-
-	tickerMutex sync.Mutex
+	logger          *zap.Logger
 }
 
 // NewImporter creates a new Importer
@@ -47,15 +43,15 @@ func NewImporter(exchange exchanges.Exchange, repositoryFactory RepositoryFactor
 		return nil
 	}
 	return &Importer{
-		exchange: exchange,
-		logger:   logger,
-
-		notificationHub: notify.NewNotificationHub(logger),
-
+		exchange:              exchange,
 		tickRepository:        tickRepository,
 		liquidationRepository: liquidationRepository,
-		tickerHistory:         make(map[domain.TickerName]*utils.RingBuffer[*domain.Ticker]),
-		tickHistory:           utils.NewRingBuffer[*domain.Tick](domain.MaxTickHistory),
+
+		tickHistory:   newTickHistory(domain.MaxTickHistory),
+		tickerHistory: newTickerHistoryMap(),
+
+		notificationHub: notify.NewNotificationHub(logger),
+		logger:          logger,
 	}
 }
 
