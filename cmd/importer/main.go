@@ -7,6 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	_ "github.com/mattn/go-sqlite3"
+
 	"github.com/ayankousky/exchange-data-importer/internal/bootstrap"
 )
 
@@ -20,6 +22,7 @@ func main() {
 		WithOptionsFetch().
 		WithLogger().
 		WithExchange().
+		WithRepository().
 		WithImporter().
 		WithNotifiers(ctx).
 		Build()

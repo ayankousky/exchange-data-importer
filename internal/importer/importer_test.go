@@ -312,7 +312,32 @@ func TestNotifyNewTick(t *testing.T) {
 					},
 				}
 				notifiers[i] = notifier
-				ts.importer.WithNotifier(notifier, domain.MarketDataTopic)
+
+				// Create strategy mock with implementation
+				strategy := &notifyMock.StrategyMock{
+					FormatFunc: func(data any) []notify.Event {
+						tick, ok := data.(*domain.Tick)
+						if !ok {
+							return nil
+						}
+						// If tick is empty, return empty events
+						if len(tick.Data) == 0 {
+							return nil
+						}
+						// Return one event per ticker
+						events := make([]notify.Event, 0, len(tick.Data))
+						for _ = range tick.Data {
+							events = append(events, notify.Event{
+								Time:      time.Now(),
+								EventType: tt.wantEventType,
+								Data:      data,
+							})
+						}
+						return events
+					},
+				}
+
+				ts.importer.WithNotifier(notifier, domain.MarketDataTopic, strategy)
 			}
 
 			// Execute the notification

@@ -5,9 +5,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ayankousky/exchange-data-importer/internal/domain"
+	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/repository/memory"
+	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/repository/sqlite"
 	"go.uber.org/zap"
 
 	"github.com/ayankousky/exchange-data-importer/internal/importer"
+	importerNotification "github.com/ayankousky/exchange-data-importer/internal/importer/notification"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure"
 	binanceExchange "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/binance"
 	bybitExchange "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/bybit"
@@ -24,12 +28,17 @@ type Builder struct {
 
 // NewBuilder creates a new Builder instance
 func NewBuilder() *Builder {
+	app := &App{}
+
+	app.logger, _ = infrastructure.NewLogger("development", "exchange-data-importer")
+	app.repositoryFactory = memory.NewInMemoryRepoFactory()
+
 	return &Builder{
-		app: &App{},
+		app: app,
 	}
 }
 
-// WithOptionsFetch adds parsed options to the App
+// WithOptionsFetch automatically fetches options from env/flags
 func (b *Builder) WithOptionsFetch() *Builder {
 	if b.err != nil {
 		return b
@@ -108,6 +117,46 @@ func (b *Builder) WithExchange() *Builder {
 	return b
 }
 
+// WithRepository initializes the repository factory
+func (b *Builder) WithRepository() *Builder {
+	if b.err != nil {
+		return b
+	}
+
+	if b.app.options == nil || b.app.logger == nil {
+		b.err = fmt.Errorf("options and logger must be initialized before repository")
+		return b
+	}
+
+	if b.app.options.Repository.Mongo.Enabled {
+		mongoClient, err := infrastructure.NewMongoClient(b.app.options.Repository.Mongo.URL)
+		if err != nil {
+			b.err = fmt.Errorf("creating mongo client: %w", err)
+			return b
+		}
+		repoFactory, err := mongo.NewMongoRepoFactory(mongoClient)
+		if err != nil {
+			b.err = fmt.Errorf("creating repository factory: %w", err)
+			return b
+		}
+		b.app.repositoryFactory = repoFactory
+		return b
+	}
+
+	if b.app.options.Repository.Sqlite.Enabled && b.app.options.Repository.Sqlite.Path != "" {
+		dsn := fmt.Sprintf("file:%s_%s?cache=shared&_foreign_keys=on", b.app.options.ServiceName, b.app.options.Repository.Sqlite.Path)
+		repoFactory, err := sqlite.NewSQLiteRepoFactory(dsn)
+		if err != nil {
+			b.err = fmt.Errorf("creating repository factory: %w", err)
+			return b
+		}
+		b.app.repositoryFactory = repoFactory
+		return b
+	}
+
+	return b
+}
+
 // WithImporter initializes the importer
 func (b *Builder) WithImporter() *Builder {
 	if b.err != nil {
@@ -119,25 +168,7 @@ func (b *Builder) WithImporter() *Builder {
 		return b
 	}
 
-	// Create repository factory
-	if b.app.options.Repository.Mongo.URL == "" {
-		b.err = fmt.Errorf("no repository URL configured")
-		return b
-	}
-
-	mongoClient, err := infrastructure.NewMongoClient(b.app.options.Repository.Mongo.URL)
-	if err != nil {
-		b.err = fmt.Errorf("creating mongo client: %w", err)
-		return b
-	}
-
-	repoFactory, err := mongo.NewMongoRepoFactory(mongoClient)
-	if err != nil {
-		b.err = fmt.Errorf("creating repository factory: %w", err)
-		return b
-	}
-
-	b.app.importer = importer.NewImporter(b.app.exchange, repoFactory, b.app.logger)
+	b.app.importer = importer.NewImporter(b.app.exchange, b.app.repositoryFactory, b.app.logger)
 	return b
 }
 
@@ -166,22 +197,23 @@ func (b *Builder) WithNotifiers(ctx context.Context) *Builder {
 	}
 
 	// Initialize Redis notifier if configured
-	if b.app.options.Notify.Redis.URL != "" {
+	if b.app.options.Notify.Redis.Topics != "" {
 		redisClient, err := infrastructure.NewRedisClient(ctx, b.app.options.Notify.Redis.URL, 1)
 		if err != nil {
 			b.app.logger.Warn("Failed to initialize Redis notifier", zap.Error(err))
 		} else {
 			for _, topic := range splitTopics(b.app.options.Notify.Redis.Topics) {
 				notifiers = append(notifiers, NotifierConfig{
-					Client: notify.NewRedisNotifier(redisClient, fmt.Sprintf("%s:%s", b.app.options.ServiceName, topic)),
-					Topic:  topic,
+					Client:   notify.NewRedisNotifier(redisClient, fmt.Sprintf("%s:%s", b.app.options.ServiceName, topic)),
+					Topic:    topic,
+					Strategy: &importerNotification.MarketDataStrategy{},
 				})
 			}
 		}
 	}
 
 	// Initialize Telegram notifier if configured
-	if b.app.options.Notify.Telegram.BotToken != "" && b.app.options.Notify.Telegram.ChatID != "" {
+	if b.app.options.Notify.Telegram.Topics != "" {
 		tgNotifier, err := notify.NewTelegramNotifier(
 			b.app.options.Notify.Telegram.BotToken,
 			b.app.options.Notify.Telegram.ChatID,
@@ -189,12 +221,30 @@ func (b *Builder) WithNotifiers(ctx context.Context) *Builder {
 		if err != nil {
 			b.app.logger.Warn("Failed to initialize Telegram notifier", zap.Error(err))
 		} else {
+			var tgAlertThresholds = domain.TickAlertThresholds{
+				AvgPrice1mChange:    2.0,
+				AvgPrice20mChange:   5.0,
+				TickerPrice1mChange: 15.0,
+			}
 			for _, topic := range splitTopics(b.app.options.Notify.Telegram.Topics) {
 				notifiers = append(notifiers, NotifierConfig{
-					Client: tgNotifier,
-					Topic:  topic,
+					Client:   tgNotifier,
+					Topic:    topic,
+					Strategy: importerNotification.NewAlertStrategy(tgAlertThresholds),
 				})
 			}
+		}
+	}
+
+	// Initialize stdout notifier if configured
+	if b.app.options.Notify.Stdout.Topics != "" {
+		stdoutNotifier := notify.NewConsoleNotifier()
+		for _, topic := range splitTopics(b.app.options.Notify.Stdout.Topics) {
+			notifiers = append(notifiers, NotifierConfig{
+				Client:   stdoutNotifier,
+				Topic:    topic,
+				Strategy: &importerNotification.TickInfoStrategy{},
+			})
 		}
 	}
 

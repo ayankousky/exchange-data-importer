@@ -13,24 +13,26 @@ import (
 
 // App represents the bootstrapped application
 type App struct {
-	logger    *zap.Logger
-	exchange  exchanges.Exchange
-	importer  *importer.Importer
-	notifiers []NotifierConfig
-	options   *Options
+	logger            *zap.Logger
+	exchange          exchanges.Exchange
+	importer          *importer.Importer
+	repositoryFactory importer.RepositoryFactory
+	notifiers         []NotifierConfig
+	options           *Options
 }
 
 // NotifierConfig holds notifier configuration
 type NotifierConfig struct {
-	Client notify.Client
-	Topic  string
+	Client   notify.Client
+	Topic    string
+	Strategy notify.Strategy
 }
 
 // Start initializes and starts the application
 func (a *App) Start(ctx context.Context) error {
 	// Add notifiers to the importer
 	for _, notifier := range a.notifiers {
-		if err := a.importer.WithNotifier(notifier.Client, notifier.Topic); err != nil {
+		if err := a.importer.WithNotifier(notifier.Client, notifier.Topic, notifier.Strategy); err != nil {
 			a.logger.Warn("Error adding notifier", zap.Error(err))
 		}
 	}

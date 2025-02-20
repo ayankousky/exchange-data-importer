@@ -9,8 +9,13 @@ type Options struct {
 
 	Repository struct {
 		Mongo struct {
-			URL string `long:"url" env:"URL" description:"MongoDB URL"`
+			Enabled bool   `long:"enabled" env:"ENABLED" description:"Enable MongoDB repository"`
+			URL     string `long:"url" env:"URL" description:"MongoDB URL"`
 		} `group:"mongo" namespace:"mongo" env-namespace:"MONGO"`
+		Sqlite struct {
+			Enabled bool   `long:"enabled" env:"ENABLED" description:"Enable SQLite repository"`
+			Path    string `long:"path" env:"PATH" description:"SQLite path"`
+		} `group:"sqlite" namespace:"sqlite" env-namespace:"SQLITE"`
 	} `group:"repository" namespace:"repository" env-namespace:"REPOSITORY"`
 
 	Exchange struct {
@@ -44,6 +49,10 @@ type Options struct {
 			ChatID   string `long:"chat-id" env:"CHAT_ID" description:"Telegram chat ID"`
 			Topics   string `long:"topics" env:"TOPICS" description:"Comma-separated list of topics"`
 		} `group:"telegram" namespace:"telegram" env-namespace:"TELEGRAM"`
+
+		Stdout struct {
+			Topics string `long:"topics" env:"TOPICS" description:"Comma-separated list of topics"`
+		} `group:"stdout" namespace:"stdout" env-namespace:"STDOUT"`
 	} `group:"notify" namespace:"notify" env-namespace:"NOTIFY"`
 }
 

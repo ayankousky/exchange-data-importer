@@ -28,15 +28,12 @@ func NewTelegramNotifier(botToken, chatID string) (*TelegramNotifier, error) {
 
 // Send sends a notification to a Telegram chat
 func (t *TelegramNotifier) Send(ctx context.Context, event Event) error {
-	// For market alerts, extract the message directly without JSON wrapping
 	message, ok := event.Data.(string)
 	if !ok {
-		return fmt.Errorf("invalid market alert data format")
+		return fmt.Errorf("telegram notifier expects string data, got %T", event.Data)
 	}
 
-	// Construct the Telegram API URL
 	apiURL := fmt.Sprintf("%s%s/sendMessage", t.baseURL, t.botToken)
-
 	params := url.Values{}
 	params.Add("chat_id", t.chatID)
 	params.Add("text", message)

@@ -13,6 +13,9 @@ const (
 
 	// AlertTopic is the event triggered when something significant happens in the market
 	AlertTopic = "ALERT_MARKET_STATE"
+
+	// TickInfoTopic is the event triggered to send common information about the tick
+	TickInfoTopic = "TICK_INFO"
 )
 
 // TopicLevel represents a notification topic
@@ -21,7 +24,7 @@ type TopicLevel string
 // Validate checks if the topic exists
 func (t TopicLevel) Validate() error {
 	switch t {
-	case MarketDataTopic, AlertTopic:
+	case MarketDataTopic, AlertTopic, TickInfoTopic:
 		return nil
 	default:
 		return fmt.Errorf("invalid topic: '%s'", t)

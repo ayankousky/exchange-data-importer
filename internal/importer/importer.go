@@ -28,8 +28,8 @@ type Importer struct {
 	tickHistory   *tickHistory
 	tickerHistory *tickerHistoryMap
 
-	notificationHub *notify.NotificationHub
-	logger          *zap.Logger
+	notifications *notify.Manager
+	logger        *zap.Logger
 }
 
 // NewImporter creates a new Importer
@@ -50,8 +50,8 @@ func NewImporter(exchange exchanges.Exchange, repositoryFactory RepositoryFactor
 		tickHistory:   newTickHistory(domain.MaxTickHistory),
 		tickerHistory: newTickerHistoryMap(),
 
-		notificationHub: notify.NewNotificationHub(logger),
-		logger:          logger,
+		notifications: notify.NewManager(logger),
+		logger:        logger,
 	}
 }
 
@@ -157,9 +157,8 @@ func (i *Importer) getInfo() string {
 	info += "\n________________________________________________________________________________\n"
 	info += fmt.Sprintf("Exchange: %s\n", i.exchange.GetName())
 	info += fmt.Sprintf("Tick history length: %d\n", i.tickHistory.Len())
+	info += fmt.Sprintf("Ticker history length: %d\n", len(i.tickerHistory.data))
 
-	totalSubscribersCount := i.notificationHub.GetTotalSubscriberCount()
-	info += fmt.Sprintf("Total subscribers: %d\n", totalSubscribersCount)
 	info += "________________________________________________________________________________\n"
 
 	return info
