@@ -28,8 +28,8 @@ func (r *Tick) Create(ctx context.Context, tick domain.Tick) error {
 
 // GetHistorySince method returns a list of tick snapshots since the specified time
 func (r *Tick) GetHistorySince(ctx context.Context, since time.Time) ([]domain.Tick, error) {
-	filter := map[string]interface{}{
-		"created_at": map[string]interface{}{
+	filter := map[string]any{
+		"created_at": map[string]any{
 			"$gte": since,
 		},
 	}

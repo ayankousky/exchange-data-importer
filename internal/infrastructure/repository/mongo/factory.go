@@ -24,7 +24,7 @@ func (f *Factory) GetTickRepository(name string) (domain.TickRepository, error) 
 
 	// create required indexes
 	_, err := db.Indexes().CreateOne(context.Background(), mongo.IndexModel{
-		Keys: map[string]interface{}{"created_at": 1},
+		Keys: map[string]any{"created_at": 1},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error creating index for tick repository: %w", err)

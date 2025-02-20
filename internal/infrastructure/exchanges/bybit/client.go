@@ -181,7 +181,7 @@ func (bc *Client) connectAndHandle(ctx context.Context, out chan<- exchanges.Liq
 	for _, ticker := range availableTickers {
 		tickersToSubscribe = append(tickersToSubscribe, fmt.Sprintf("liquidation.%s", ticker))
 	}
-	subscribeMsg := map[string]interface{}{
+	subscribeMsg := map[string]any{
 		"op":     "subscribe",
 		"req_id": "liquidations",
 		"args":   tickersToSubscribe,

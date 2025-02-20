@@ -39,7 +39,7 @@ func (m *Manager) Subscribe(topic string, client Client, strategy Strategy) {
 }
 
 // Notify sends a notification to all subscribers of the topic
-func (m *Manager) Notify(ctx context.Context, topic string, data interface{}) {
+func (m *Manager) Notify(ctx context.Context, topic string, data any) {
 	m.mu.RLock()
 	subs := m.subscribers[topic]
 	m.mu.RUnlock()

@@ -48,7 +48,7 @@ func TestNewBinance(t *testing.T) {
 func TestClient_FetchTickers(t *testing.T) {
 	tests := []struct {
 		name          string
-		response      interface{}
+		response      any
 		statusCode    int
 		expectError   bool
 		wantTickers   []exchanges.Ticker

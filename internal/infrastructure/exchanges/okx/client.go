@@ -183,10 +183,10 @@ func (oc *Client) connectAndHandle(ctx context.Context, out chan<- exchanges.Liq
 		return nil
 	}
 
-	subscribeMsg := map[string]interface{}{
+	subscribeMsg := map[string]any{
 		"op": "subscribe",
-		"args": []interface{}{
-			map[string]interface{}{
+		"args": []any{
+			map[string]any{
 				"channel":  "liquidation-orders",
 				"instType": "SWAP",
 			},
