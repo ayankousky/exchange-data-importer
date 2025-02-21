@@ -150,8 +150,8 @@ func (b *Builder) WithImporter() *Builder {
 		return b
 	}
 
-	if b.app.options == nil || b.app.exchange == nil || b.app.logger == nil {
-		b.err = fmt.Errorf("options, exchange, and logger must be initialized before importer")
+	if b.app.exchange == nil {
+		b.err = fmt.Errorf("exchange must be initialized before importer")
 		return b
 	}
 
@@ -199,6 +199,7 @@ func (b *Builder) WithNotifiers(ctx context.Context) *Builder {
 		tgNotifier, err := notify.NewTelegramNotifier(
 			b.app.options.Notify.Telegram.BotToken,
 			b.app.options.Notify.Telegram.ChatID,
+			b.app.options.Notify.Telegram.Interval,
 		)
 		if err != nil {
 			b.app.logger.Warn("Failed to initialize Telegram notifier", zap.Error(err))
@@ -225,7 +226,7 @@ func (b *Builder) WithNotifiers(ctx context.Context) *Builder {
 			notifiers = append(notifiers, NotifierConfig{
 				Client:   stdoutNotifier,
 				Topic:    topic,
-				Strategy: &notificationStrategies.TickInfoStrategy{},
+				Strategy: notificationStrategies.NewTickInfoStrategy(),
 			})
 		}
 	}
