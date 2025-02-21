@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ayankousky/exchange-data-importer/internal/domain"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/repository/memory"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/repository/sqlite"
+	notificationStrategies "github.com/ayankousky/exchange-data-importer/internal/notifier/strategies"
 	"go.uber.org/zap"
 
 	"github.com/ayankousky/exchange-data-importer/internal/importer"
-	importerNotification "github.com/ayankousky/exchange-data-importer/internal/importer/notification"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure"
 	binanceExchange "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/binance"
 	bybitExchange "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/bybit"
@@ -33,13 +32,16 @@ func NewBuilder() *Builder {
 	app.logger, _ = infrastructure.NewLogger("development", "exchange-data-importer")
 	app.repositoryFactory = memory.NewInMemoryRepoFactory()
 
-	return &Builder{
+	builder := &Builder{
 		app: app,
 	}
+	builder.fetchOptions()
+
+	return builder
 }
 
-// WithOptionsFetch automatically fetches options from env/flags
-func (b *Builder) WithOptionsFetch() *Builder {
+// fetchOptions automatically fetches options from env/flags
+func (b *Builder) fetchOptions() *Builder {
 	if b.err != nil {
 		return b
 	}
@@ -60,11 +62,6 @@ func (b *Builder) WithLogger() *Builder {
 		return b
 	}
 
-	if b.app.options == nil {
-		b.err = fmt.Errorf("options must be initialized before logger")
-		return b
-	}
-
 	logger, err := infrastructure.NewLogger(b.app.options.Env, b.app.options.ServiceName)
 	if err != nil {
 		b.err = fmt.Errorf("creating logger: %w", err)
@@ -78,11 +75,6 @@ func (b *Builder) WithLogger() *Builder {
 // WithExchange initializes the exchange client
 func (b *Builder) WithExchange() *Builder {
 	if b.err != nil {
-		return b
-	}
-
-	if b.app.options == nil {
-		b.err = fmt.Errorf("options must be initialized before exchange")
 		return b
 	}
 
@@ -120,11 +112,6 @@ func (b *Builder) WithExchange() *Builder {
 // WithRepository initializes the repository factory
 func (b *Builder) WithRepository() *Builder {
 	if b.err != nil {
-		return b
-	}
-
-	if b.app.options == nil || b.app.logger == nil {
-		b.err = fmt.Errorf("options and logger must be initialized before repository")
 		return b
 	}
 
@@ -168,18 +155,13 @@ func (b *Builder) WithImporter() *Builder {
 		return b
 	}
 
-	b.app.importer = importer.NewImporter(b.app.exchange, b.app.repositoryFactory, b.app.logger)
+	b.app.importer = importer.New(b.app.exchange, b.app.repositoryFactory, b.app.logger)
 	return b
 }
 
 // WithNotifiers initializes the notifiers
 func (b *Builder) WithNotifiers(ctx context.Context) *Builder {
 	if b.err != nil {
-		return b
-	}
-
-	if b.app.options == nil || b.app.logger == nil {
-		b.err = fmt.Errorf("options and logger must be initialized before notifiers")
 		return b
 	}
 
@@ -206,7 +188,7 @@ func (b *Builder) WithNotifiers(ctx context.Context) *Builder {
 				notifiers = append(notifiers, NotifierConfig{
 					Client:   notify.NewRedisNotifier(redisClient, fmt.Sprintf("%s:%s", b.app.options.ServiceName, topic)),
 					Topic:    topic,
-					Strategy: &importerNotification.MarketDataStrategy{},
+					Strategy: &notificationStrategies.MarketDataStrategy{},
 				})
 			}
 		}
@@ -221,7 +203,7 @@ func (b *Builder) WithNotifiers(ctx context.Context) *Builder {
 		if err != nil {
 			b.app.logger.Warn("Failed to initialize Telegram notifier", zap.Error(err))
 		} else {
-			var tgAlertThresholds = domain.TickAlertThresholds{
+			var tgAlertThresholds = notificationStrategies.AlertStrategyThresholds{
 				AvgPrice1mChange:    2.0,
 				AvgPrice20mChange:   5.0,
 				TickerPrice1mChange: 15.0,
@@ -230,7 +212,7 @@ func (b *Builder) WithNotifiers(ctx context.Context) *Builder {
 				notifiers = append(notifiers, NotifierConfig{
 					Client:   tgNotifier,
 					Topic:    topic,
-					Strategy: importerNotification.NewAlertStrategy(tgAlertThresholds),
+					Strategy: notificationStrategies.NewAlertStrategy(tgAlertThresholds),
 				})
 			}
 		}
@@ -243,7 +225,7 @@ func (b *Builder) WithNotifiers(ctx context.Context) *Builder {
 			notifiers = append(notifiers, NotifierConfig{
 				Client:   stdoutNotifier,
 				Topic:    topic,
-				Strategy: &importerNotification.TickInfoStrategy{},
+				Strategy: &notificationStrategies.TickInfoStrategy{},
 			})
 		}
 	}

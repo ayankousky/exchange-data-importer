@@ -2,56 +2,25 @@ package notify
 
 import (
 	"context"
-	"sync"
-
-	"go.uber.org/zap"
+	"time"
 )
 
-// Manager handles notification delivery
-type Manager struct {
-	subscribers map[string][]struct {
-		client   Client
-		strategy Strategy
-	}
-	logger *zap.Logger
-	mu     sync.RWMutex
+//go:generate moq --out mocks/notifier.go --pkg mocks --with-resets --skip-ensure . Client
+//go:generate moq --out mocks/strategy.go --pkg mocks --with-resets --skip-ensure . Strategy
+
+// Event represents a notification event
+type Event struct {
+	Time      time.Time `json:"ct"`
+	EventType string    `json:"event_type"`
+	Data      any       `json:"data"`
 }
 
-// NewManager creates a new notification manager
-func NewManager(logger *zap.Logger) *Manager {
-	return &Manager{
-		subscribers: make(map[string][]struct {
-			client   Client
-			strategy Strategy
-		}),
-		logger: logger,
-	}
+// Client represents a notification service contract
+type Client interface {
+	Send(ctx context.Context, event Event) error
 }
 
-// Subscribe adds a new subscriber to the manager
-func (m *Manager) Subscribe(topic string, client Client, strategy Strategy) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.subscribers[topic] = append(m.subscribers[topic], struct {
-		client   Client
-		strategy Strategy
-	}{client, strategy})
-}
-
-// Notify sends a notification to all subscribers of the topic
-func (m *Manager) Notify(ctx context.Context, topic string, data any) {
-	m.mu.RLock()
-	subs := m.subscribers[topic]
-	m.mu.RUnlock()
-
-	for _, sub := range subs {
-		events := sub.strategy.Format(data)
-		for _, event := range events {
-			if err := sub.client.Send(ctx, event); err != nil {
-				m.logger.Error("Failed to notify subscriber",
-					zap.Error(err),
-					zap.String("topic", topic))
-			}
-		}
-	}
+// Strategy defines how to format data for notifications
+type Strategy interface {
+	Format(data any) []Event
 }

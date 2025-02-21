@@ -1,80 +1,58 @@
-package domain
+package strategies
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"strings"
+	"time"
+
+	"github.com/ayankousky/exchange-data-importer/internal/domain"
+	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/notify"
+	"github.com/ayankousky/exchange-data-importer/internal/notifier"
 )
 
-const (
-	// MarketDataTopic is the event type for ticker data
-	MarketDataTopic = "TICKER"
-
-	// AlertTopic is the event triggered when something significant happens in the market
-	AlertTopic = "ALERT_MARKET_STATE"
-
-	// TickInfoTopic is the event triggered to send common information about the tick
-	TickInfoTopic = "TICK_INFO"
-)
-
-// TopicLevel represents a notification topic
-type TopicLevel string
-
-// Validate checks if the topic exists
-func (t TopicLevel) Validate() error {
-	switch t {
-	case MarketDataTopic, AlertTopic, TickInfoTopic:
-		return nil
-	default:
-		return fmt.Errorf("invalid topic: '%s'", t)
-	}
-}
-func (t TopicLevel) String() string {
-	return string(t)
+// AlertStrategy creates important information if the tick has abnormal values
+type AlertStrategy struct {
+	thresholds AlertStrategyThresholds
 }
 
-// TickerNotification represents a ticker notification event without excessive data
-type TickerNotification struct {
-	Tick   Tick   `json:"tick"`
-	Ticker Ticker `json:"ticker"`
-}
-
-// NewTickerNotification creates a new TickerNotification from a tick and a given ticker name
-func NewTickerNotification(tick *Tick, symbol TickerName) (*TickerNotification, error) {
-	if tick == nil {
-		return nil, errors.New("tick cannot be nil")
-	}
-
-	tickCopy := *tick
-	tickCopy.Data = nil
-
-	if _, exists := tick.Data[symbol]; !exists {
-		return nil, errors.New("ticker not found in tick data")
-	}
-
-	notification := &TickerNotification{
-		Tick:   tickCopy,
-		Ticker: *tick.Data[symbol],
-	}
-
-	return notification, nil
-}
-
-// TickAlertThresholds defines thresholds for generating market alerts
-type TickAlertThresholds struct {
+// AlertStrategyThresholds defines thresholds for generating market alerts
+type AlertStrategyThresholds struct {
 	AvgPrice1mChange    float64 // price change in 1 minute for the entire market
 	AvgPrice20mChange   float64 // price change in 20 minutes for the entire market
 	TickerPrice1mChange float64 // price change in 1 minute for a single ticker
 }
 
-// MarketAlert represents a formatted market alert message
-type MarketAlert struct {
-	Message string `json:"message"`
+// NewAlertStrategy creates a new AlertStrategy
+func NewAlertStrategy(thresholds AlertStrategyThresholds) *AlertStrategy {
+	return &AlertStrategy{thresholds: thresholds}
 }
 
-// FormatTickerAlert formats a single ticker's data into a readable message
-func FormatTickerAlert(ticker *Ticker) string {
+// Format formats the tick data into a human-readable format
+func (s *AlertStrategy) Format(data any) []notify.Event {
+	tick, ok := data.(*domain.Tick)
+	if !ok {
+		return nil
+	}
+
+	if tick == nil {
+		return nil
+	}
+
+	message, hasAlerts := formatTickAlert(tick, s.thresholds)
+	if !hasAlerts {
+		return nil
+	}
+
+	return []notify.Event{{
+		Time:      time.Now(),
+		EventType: string(notifier.AlertTopic),
+		Data:      message,
+	}}
+}
+
+// formatTickerAlert formats a single ticker's data into a readable message
+func formatTickerAlert(ticker *domain.Ticker) string {
 	parts := []string{
 		fmt.Sprintf("<b>%s</b>", string(ticker.Symbol)),
 		fmt.Sprintf("%.2f/%.2f", ticker.Ask, ticker.Bid),
@@ -101,8 +79,8 @@ func FormatTickerAlert(ticker *Ticker) string {
 	return strings.Join(parts, " | ")
 }
 
-// FormatTickAlert formats a market tick into a readable message
-func FormatTickAlert(tick *Tick, thresholds TickAlertThresholds) (string, bool) {
+// formatTickAlert formats a market tick into a readable message
+func formatTickAlert(tick *domain.Tick, thresholds AlertStrategyThresholds) (string, bool) {
 	if tick == nil {
 		return "", false
 	}
@@ -130,7 +108,7 @@ func FormatTickAlert(tick *Tick, thresholds TickAlertThresholds) (string, bool) 
 	var significantTickers []string
 	for _, ticker := range tick.Data {
 		if math.Abs(ticker.Change1m) >= thresholds.TickerPrice1mChange {
-			significantTickers = append(significantTickers, FormatTickerAlert(ticker))
+			significantTickers = append(significantTickers, formatTickerAlert(ticker))
 			hasAlert = true
 		}
 	}

@@ -7,7 +7,7 @@ import (
 
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges"
-	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/notify"
+	"github.com/ayankousky/exchange-data-importer/internal/notifier"
 	"go.uber.org/zap"
 )
 
@@ -28,12 +28,12 @@ type Importer struct {
 	tickHistory   *tickHistory
 	tickerHistory *tickerHistoryMap
 
-	notifications *notify.Manager
-	logger        *zap.Logger
+	notifier *notifier.Notifier
+	logger   *zap.Logger
 }
 
-// NewImporter creates a new Importer
-func NewImporter(exchange exchanges.Exchange, repositoryFactory RepositoryFactory, logger *zap.Logger) *Importer {
+// New creates a new Importer
+func New(exchange exchanges.Exchange, repositoryFactory RepositoryFactory, logger *zap.Logger) *Importer {
 	tickRepository, err := repositoryFactory.GetTickRepository(exchange.GetName())
 	if err != nil {
 		return nil
@@ -50,8 +50,8 @@ func NewImporter(exchange exchanges.Exchange, repositoryFactory RepositoryFactor
 		tickHistory:   newTickHistory(domain.MaxTickHistory),
 		tickerHistory: newTickerHistoryMap(),
 
-		notifications: notify.NewManager(logger),
-		logger:        logger,
+		notifier: notifier.New(logger),
+		logger:   logger,
 	}
 }
 

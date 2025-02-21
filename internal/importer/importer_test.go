@@ -12,6 +12,7 @@ import (
 	exchangeMocks "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/mocks"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/notify"
 	notifyMock "github.com/ayankousky/exchange-data-importer/internal/infrastructure/notify/mocks"
+	"github.com/ayankousky/exchange-data-importer/internal/notifier"
 	"github.com/ayankousky/exchange-data-importer/pkg/utils/mathutils"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
@@ -75,7 +76,7 @@ func setupTest() *testSuite {
 		repoFactory: repoFactory,
 		tickRepo:    tickRepo,
 		liqRepo:     liqRepo,
-		importer:    NewImporter(exchange, repoFactory, zap.NewNop()),
+		importer:    New(exchange, repoFactory, zap.NewNop()),
 	}
 }
 
@@ -265,7 +266,7 @@ func TestNotifyNewTick(t *testing.T) {
 				},
 			},
 			notifierCount: 1,
-			wantEventType: domain.MarketDataTopic,
+			wantEventType: string(notifier.MarketDataTopic),
 			wantCalls:     2, // One call per ticker
 		},
 		{
@@ -280,7 +281,7 @@ func TestNotifyNewTick(t *testing.T) {
 				},
 			},
 			notifierCount: 3,
-			wantEventType: domain.MarketDataTopic,
+			wantEventType: string(notifier.MarketDataTopic),
 			wantCalls:     3, // One call per notifier
 		},
 		{
@@ -289,7 +290,7 @@ func TestNotifyNewTick(t *testing.T) {
 				Data: map[domain.TickerName]*domain.Ticker{},
 			},
 			notifierCount: 1,
-			wantEventType: domain.MarketDataTopic,
+			wantEventType: string(notifier.MarketDataTopic),
 			wantCalls:     0,
 		},
 	}
@@ -302,7 +303,7 @@ func TestNotifyNewTick(t *testing.T) {
 			// Create and configure notifier mocks
 			notifiers := make([]*notifyMock.ClientMock, tt.notifierCount)
 			for i := 0; i < tt.notifierCount; i++ {
-				notifier := &notifyMock.ClientMock{
+				n := &notifyMock.ClientMock{
 					SendFunc: func(ctx context.Context, event notify.Event) error {
 						// Verify event properties
 						assert.Equal(t, tt.wantEventType, event.EventType)
@@ -311,7 +312,7 @@ func TestNotifyNewTick(t *testing.T) {
 						return nil
 					},
 				}
-				notifiers[i] = notifier
+				notifiers[i] = n
 
 				// Create strategy mock with implementation
 				strategy := &notifyMock.StrategyMock{
@@ -337,13 +338,13 @@ func TestNotifyNewTick(t *testing.T) {
 					},
 				}
 
-				ts.importer.WithNotifier(notifier, domain.MarketDataTopic, strategy)
+				ts.importer.WithNotifier(n, string(notifier.MarketDataTopic), strategy)
 			}
 
 			// Execute the notification
 			ts.importer.notifyNewTick(tt.tick)
 
-			// Verify the notifications
+			// Verify the notifier
 			totalCalls := 0
 			for _, notifier := range notifiers {
 				calls := len(notifier.SendCalls())
