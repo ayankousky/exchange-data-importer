@@ -47,6 +47,7 @@ type Options struct {
 		Telegram struct {
 			BotToken string `long:"bot-token" env:"BOT_TOKEN" description:"Telegram bot token"`
 			ChatID   string `long:"chat-id" env:"CHAT_ID" description:"Telegram chat ID"`
+			Interval int    `long:"interval" env:"INTERVAL" description:"Min interval in seconds between notifications"`
 			Topics   string `long:"topics" env:"TOPICS" description:"Comma-separated list of topics"`
 		} `group:"telegram" namespace:"telegram" env-namespace:"TELEGRAM"`
 

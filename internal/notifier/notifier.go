@@ -23,7 +23,7 @@ func (t Topic) Validate() error {
 
 const (
 	// MarketDataTopic is the event type for ticker data
-	MarketDataTopic Topic = "TICKER"
+	MarketDataTopic Topic = "MARKET_DATA"
 
 	// AlertTopic is the event triggered when something significant happens in the market
 	AlertTopic Topic = "ALERT_MARKET_STATE"

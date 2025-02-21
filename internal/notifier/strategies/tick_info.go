@@ -12,13 +12,20 @@ import (
 )
 
 const (
-	headerFormat = "%-8s | %4s | %8s | %8s | %8s | %6s | %6s | %6s | %6s\n"
-	dataFormat   = "%-8s | %4d | %8.2f | %8.2f | %8.2f | %6d | %6d | %6d | %6d\n"
+	headerFormat = "%-20s | %4s | %8s | %8s | %8s | %6s | %6s | %6s | %6s\n"
+	dataFormat   = "%-20s | %4d | %8.2f | %8.2f | %8.2f | %6d | %6d | %6d | %6d\n"
 )
 
 // TickInfoStrategy creates common tick information in the stdout
 type TickInfoStrategy struct {
 	printCount atomic.Int64
+}
+
+// NewTickInfoStrategy creates a new TickInfoStrategy
+func NewTickInfoStrategy() *TickInfoStrategy {
+	strategy := &TickInfoStrategy{}
+	strategy.printCount.Store(-1)
+	return strategy
 }
 
 // Format formats the tick data into a human-readable format
@@ -39,8 +46,8 @@ func (s *TickInfoStrategy) Format(data any) []notify.Event {
 		fmt.Fprintf(&output, headerFormat,
 			"TIME",
 			"MKTS",
-			"1M CHG%",
-			"20M CHG%",
+			"Max10 %",
+			"Min10 %",
 			"AVG BUY",
 			"LL5",
 			"LL60",
@@ -50,10 +57,10 @@ func (s *TickInfoStrategy) Format(data any) []notify.Event {
 	}
 
 	fmt.Fprintf(&output, dataFormat,
-		tick.CreatedAt.Format("15:04:05"),
+		tick.CreatedAt.Format("2006-01-02 15:04:05"),
 		tick.Avg.TickersCount,
-		tick.Avg.Change1m,
-		tick.Avg.Change20m,
+		tick.Avg.Max10,
+		tick.Avg.Min10,
 		tick.AvgBuy10,
 		tick.LL5,
 		tick.LL60,
