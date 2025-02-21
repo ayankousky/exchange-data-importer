@@ -78,27 +78,27 @@ func (b *Builder) WithExchange() *Builder {
 		return b
 	}
 
-	if b.app.options.Exchange.Binance.Name != "" {
+	if b.app.options.Exchange.Binance.Enabled {
 		b.app.exchange = binanceExchange.NewBinance(binanceExchange.Config{
-			Name:   b.app.options.Exchange.Binance.Name,
+			Name:   b.app.options.ServiceName,
 			APIUrl: b.app.options.Exchange.Binance.APIUrl,
 			WSUrl:  b.app.options.Exchange.Binance.WSUrl,
 		})
 		return b
 	}
 
-	if b.app.options.Exchange.Bybit.Name != "" {
+	if b.app.options.Exchange.Bybit.Enabled {
 		b.app.exchange = bybitExchange.NewBybit(bybitExchange.Config{
-			Name:   b.app.options.Exchange.Bybit.Name,
+			Name:   b.app.options.ServiceName,
 			APIUrl: b.app.options.Exchange.Bybit.APIUrl,
 			WSUrl:  b.app.options.Exchange.Bybit.WSUrl,
 		})
 		return b
 	}
 
-	if b.app.options.Exchange.OKX.Name != "" {
+	if b.app.options.Exchange.OKX.Enabled {
 		b.app.exchange = okxExchange.NewOKX(okxExchange.Config{
-			Name:   b.app.options.Exchange.OKX.Name,
+			Name:   b.app.options.ServiceName,
 			APIUrl: b.app.options.Exchange.OKX.APIUrl,
 			WSUrl:  b.app.options.Exchange.OKX.WSUrl,
 		})

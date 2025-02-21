@@ -20,21 +20,21 @@ type Options struct {
 
 	Exchange struct {
 		Binance struct {
-			APIUrl string `long:"api-url" env:"API_URL" description:"(optional) Binance API URL"`
-			WSUrl  string `long:"ws-url" env:"WS_URL" description:"(optional) Binance WebSocket URL"`
-			Name   string `long:"name" env:"NAME" description:"Binance name"`
+			Enabled bool   `long:"enabled" env:"ENABLED" description:"Enable Binance exchange"`
+			APIUrl  string `long:"api-url" env:"API_URL" description:"(optional) Binance API URL"`
+			WSUrl   string `long:"ws-url" env:"WS_URL" description:"(optional) Binance WebSocket URL"`
 		} `group:"binance" namespace:"binance" env-namespace:"BINANCE"`
 
 		Bybit struct {
-			APIUrl string `long:"api-url" env:"API_URL" description:"(optional) Bybit API URL"`
-			WSUrl  string `long:"ws-url" env:"WS_URL" description:"(optional) Bybit WebSocket URL"`
-			Name   string `long:"name" env:"NAME" description:"Bybit name"`
+			Enabled bool   `long:"enabled" env:"ENABLED" description:"Enable Bybit exchange"`
+			APIUrl  string `long:"api-url" env:"API_URL" description:"(optional) Bybit API URL"`
+			WSUrl   string `long:"ws-url" env:"WS_URL" description:"(optional) Bybit WebSocket URL"`
 		} `group:"bybit" namespace:"bybit" env-namespace:"BYBIT"`
 
 		OKX struct {
-			APIUrl string `long:"api-url" env:"API_URL" description:"(optional) OKX API URL"`
-			WSUrl  string `long:"ws-url" env:"WS_URL" description:"(optional) OKX WebSocket URL"`
-			Name   string `long:"name" env:"NAME" description:"OKX name"`
+			Enabled bool   `long:"enabled" env:"ENABLED" description:"Enable OKX exchange"`
+			APIUrl  string `long:"api-url" env:"API_URL" description:"(optional) OKX API URL"`
+			WSUrl   string `long:"ws-url" env:"WS_URL" description:"(optional) OKX WebSocket URL"`
 		} `group:"okx" namespace:"okx" env-namespace:"OKX"`
 	} `group:"exchange" namespace:"exchange" env-namespace:"EXCHANGE"`
 
