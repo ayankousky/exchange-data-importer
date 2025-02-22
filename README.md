@@ -15,9 +15,9 @@ Simple and extensible service for importing market data (tickers and liquidation
 
 ```
 /cmd
-  /importer           # Main application entry point
+  /importer         # Main application entry point
 /internal
-  /bootstrap         # Application initialization and configuration
+  /bootstrap        # Application initialization and configuration
   /domain           # Core business entities and interfaces
   /importer         # Market data import implementation
   /infrastructure   # External integrations (exchanges, storage, notifications)
@@ -43,7 +43,7 @@ Or use environment variables:
 EXCHANGE_BINANCE_ENABLED=true
 NOTIFY_STDOUT_TOPICS=TICK_INFO
 
-# Optional: other exchanges available
+# Optional: or another exchange
 # EXCHANGE_BYBIT_ENABLED=true
 # EXCHANGE_OKX_ENABLED=true
 
@@ -56,7 +56,7 @@ NOTIFY_STDOUT_TOPICS=TICK_INFO
 
 When using TICK_INFO notifications, data is displayed in the following format:
 ```
-TIME                 | MKTS |  Max10 % |  Min10 % |  AVG BUY |    LL5 |   LL60 |    SL2 |   SL10
+TIME | MKTS | Max10 % | Min10 % | AVG BUY | LL5 | LL60 | SL2 | SL10
 ```
 
 All values represent averages across all tracked markets (trading pairs):
