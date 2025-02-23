@@ -1,7 +1,9 @@
 package importer
 
 import (
+	"math"
 	"sync"
+	"time"
 
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
 	"github.com/ayankousky/exchange-data-importer/pkg/utils"
@@ -62,4 +64,56 @@ func (thm *tickerHistoryMap) Get(name domain.TickerName) *utils.RingBuffer[*doma
 		thm.mu.Unlock()
 	}
 	return history
+}
+
+// UpdateTicker atomically updates or adds a new ticker to the history
+func (thm *tickerHistoryMap) UpdateTicker(ticker *domain.Ticker) {
+	thm.mu.Lock()
+	defer thm.mu.Unlock()
+
+	history := thm.getOrCreateBuffer(ticker.Symbol)
+	lastTickerData, exists := history.Last()
+	if exists && lastTickerData.CreatedAt.After(ticker.CreatedAt) {
+		// Skip older data
+		return
+	}
+
+	if !exists || !lastTickerData.CreatedAt.Truncate(time.Minute).Equal(ticker.CreatedAt.Truncate(time.Minute)) {
+		// New minute or no previous data - create new entry
+		ticker.Max = ticker.Ask
+		ticker.Min = ticker.Ask
+		history.Push(ticker)
+		return
+	}
+
+	if lastTickerData.CreatedAt.After(ticker.CreatedAt) {
+		// Skip older data
+		return
+	}
+
+	// Update existing minute data
+	updateMinuteData(lastTickerData, ticker)
+}
+
+// getOrCreateBuffer returns existing buffer or creates a new one (must be called under lock)
+func (thm *tickerHistoryMap) getOrCreateBuffer(name domain.TickerName) *utils.RingBuffer[*domain.Ticker] {
+	history, ok := thm.data[name]
+	if !ok {
+		history = utils.NewRingBuffer[*domain.Ticker](domain.MaxTickHistory)
+		thm.data[name] = history
+	}
+	return history
+}
+
+// updateMinuteData updates the ticker data for the current minute
+func updateMinuteData(existing, new *domain.Ticker) {
+	existing.Max = math.Max(existing.Max, new.Ask)
+	existing.Min = math.Min(existing.Min, new.Ask)
+	existing.Ask = new.Ask
+	existing.Bid = new.Bid
+	existing.CreatedAt = new.CreatedAt
+
+	// Mirror changes to the new ticker
+	new.Max = existing.Max
+	new.Min = existing.Min
 }

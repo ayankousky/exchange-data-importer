@@ -26,45 +26,17 @@ func (i *Importer) initHistory(ctx context.Context) error {
 }
 
 func (i *Importer) addTickHistory(tick *domain.Tick) {
+	lastTick, exists := i.tickHistory.Last()
+	if exists && lastTick.CreatedAt.After(tick.CreatedAt) {
+		return
+	}
+
 	i.tickHistory.Push(tick)
 }
 
 // addTickerHistory updates the ring buffer for a particular ticker - 1 item per 1 minute
 func (i *Importer) addTickerHistory(ticker *domain.Ticker) {
-	history := i.tickerHistory.Get(ticker.Symbol)
-
-	lastTickerData, err := i.getLastTicker(ticker.Symbol)
-	// If there’s no data for this minute, push a new item
-	if err != nil || !lastTickerData.CreatedAt.Truncate(time.Minute).Equal(ticker.CreatedAt.Truncate(time.Minute)) {
-		ticker.Max = ticker.Ask
-		ticker.Min = ticker.Ask
-		history.Push(ticker)
-		return
-	}
-
-	// Update the existing lastTickerData
-	if ticker.Ask > lastTickerData.Max {
-		lastTickerData.Max = ticker.Ask
-	}
-	if ticker.Ask < lastTickerData.Min {
-		lastTickerData.Min = ticker.Ask
-	}
-	lastTickerData.Ask = ticker.Ask
-	lastTickerData.Bid = ticker.Bid
-	lastTickerData.CreatedAt = ticker.CreatedAt
-
-	// mirror these changes in the newly pushed ticker object
-	ticker.Max = lastTickerData.Max
-	ticker.Min = lastTickerData.Min
-}
-
-func (i *Importer) getLastTicker(tickerName domain.TickerName) (*domain.Ticker, error) {
-	history := i.tickerHistory.Get(tickerName)
-	lastTicker, exists := history.Last()
-	if !exists {
-		return nil, fmt.Errorf("no ticker history found for %s", tickerName)
-	}
-	return lastTicker, nil
+	i.tickerHistory.UpdateTicker(ticker)
 }
 
 func (i *Importer) getLastTick() (*domain.Tick, error) {
