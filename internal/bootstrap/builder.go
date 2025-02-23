@@ -57,7 +57,7 @@ func (b *Builder) fetchOptions() *Builder {
 }
 
 // WithLogger initializes the logger
-func (b *Builder) WithLogger() *Builder {
+func (b *Builder) WithLogger(_ context.Context) *Builder {
 	if b.err != nil {
 		return b
 	}
@@ -73,7 +73,7 @@ func (b *Builder) WithLogger() *Builder {
 }
 
 // WithExchange initializes the exchange client
-func (b *Builder) WithExchange() *Builder {
+func (b *Builder) WithExchange(_ context.Context) *Builder {
 	if b.err != nil {
 		return b
 	}
@@ -110,13 +110,13 @@ func (b *Builder) WithExchange() *Builder {
 }
 
 // WithRepository initializes the repository factory
-func (b *Builder) WithRepository() *Builder {
+func (b *Builder) WithRepository(ctx context.Context) *Builder {
 	if b.err != nil {
 		return b
 	}
 
 	if b.app.options.Repository.Mongo.Enabled {
-		mongoClient, err := infrastructure.NewMongoClient(b.app.options.Repository.Mongo.URL)
+		mongoClient, err := infrastructure.NewMongoClient(ctx, b.app.options.Repository.Mongo.URL)
 		if err != nil {
 			b.err = fmt.Errorf("creating mongo client: %w", err)
 			return b
@@ -141,21 +141,6 @@ func (b *Builder) WithRepository() *Builder {
 		return b
 	}
 
-	return b
-}
-
-// WithImporter initializes the importer
-func (b *Builder) WithImporter() *Builder {
-	if b.err != nil {
-		return b
-	}
-
-	if b.app.exchange == nil {
-		b.err = fmt.Errorf("exchange must be initialized before importer")
-		return b
-	}
-
-	b.app.importer = importer.New(b.app.exchange, b.app.repositoryFactory, b.app.logger)
 	return b
 }
 
@@ -241,10 +226,9 @@ func (b *Builder) Build() (*App, error) {
 		return nil, b.err
 	}
 
-	if b.app.logger == nil ||
-		b.app.exchange == nil ||
-		b.app.importer == nil ||
-		b.app.options == nil {
+	b.app.importer = importer.New(b.app.exchange, b.app.repositoryFactory, b.app.logger)
+
+	if b.app.exchange == nil || b.app.importer == nil {
 		return nil, fmt.Errorf("missing required dependencies")
 	}
 
