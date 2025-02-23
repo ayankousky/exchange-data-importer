@@ -1,17 +1,15 @@
-name: build-app
+name: ci
 on:
   push:
     branches:
     tags:
   pull_request:
 
-
 jobs:
-  build:
-    name: build
+  test:
+    name: test
     runs-on: ubuntu-latest
     steps:
-
       - name: set up go 1.23
         uses: actions/setup-go@v5
         with:
@@ -41,32 +39,3 @@ jobs:
         run: $(go env GOPATH)/bin/goveralls -service="github" -coverprofile=$GITHUB_WORKSPACE/profile.cov
         env:
           COVERALLS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: set up QEMU
-        uses: docker/setup-qemu-action@v2
-
-      - name: set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: available platforms
-        run: echo ${{ steps.buildx.outputs.platforms }}
-
-      - name: build and deploy main image to ghcr.io
-        if: ${{ github.ref == 'refs/heads/main' }}
-        env:
-          GITHUB_PACKAGE_TOKEN: ${{ secrets.GHCR_LOGIN }}
-          USERNAME: ${{ github.actor }}
-          GITHUB_SHA: ${{ github.sha}}
-          GITHUB_REF: ${{ github.ref}}
-        run: |
-          ref="$(echo ${GITHUB_REF} | cut -d'/' -f3)"
-          echo GITHUB_REF - $ref
-          echo ${GITHUB_PACKAGE_TOKEN} | docker login ghcr.io -u ${USERNAME} --password-stdin
-          docker buildx build --push \
-              --target release \
-              --build-arg CI=github \
-              --build-arg GITHUB_SHA=${GITHUB_SHA} \
-              --build-arg GIT_BRANCH=${ref} \
-              --platform linux/amd64,linux/arm/v7,linux/arm64 \
-              -t ghcr.io/${USERNAME}/exchange-importer:${ref} .
