@@ -106,14 +106,14 @@ func (thm *tickerHistoryMap) getOrCreateBuffer(name domain.TickerName) *utils.Ri
 }
 
 // updateMinuteData updates the ticker data for the current minute
-func updateMinuteData(existing, new *domain.Ticker) {
-	existing.Max = math.Max(existing.Max, new.Ask)
-	existing.Min = math.Min(existing.Min, new.Ask)
-	existing.Ask = new.Ask
-	existing.Bid = new.Bid
-	existing.CreatedAt = new.CreatedAt
+func updateMinuteData(existingTicker, newTicker *domain.Ticker) {
+	existingTicker.Max = math.Max(existingTicker.Max, newTicker.Ask)
+	existingTicker.Min = math.Min(existingTicker.Min, newTicker.Ask)
+	existingTicker.Ask = newTicker.Ask
+	existingTicker.Bid = newTicker.Bid
+	existingTicker.CreatedAt = newTicker.CreatedAt
 
-	// Mirror changes to the new ticker
-	new.Max = existing.Max
-	new.Min = existing.Min
+	// Mirror changes to the newTicker ticker
+	newTicker.Max = existingTicker.Max
+	newTicker.Min = existingTicker.Min
 }
