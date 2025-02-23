@@ -7,16 +7,24 @@ import (
 
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges"
+	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/notify"
 	"github.com/ayankousky/exchange-data-importer/internal/notifier"
 	"go.uber.org/zap"
 )
 
 //go:generate moq --out mocks/repository_factory.go --pkg mocks --with-resets --skip-ensure . RepositoryFactory
+//go:generate moq --out mocks/notifier.go --pkg mocks --with-resets --skip-ensure . NotifierService
 
 // RepositoryFactory is a contract for creating repositories
 type RepositoryFactory interface {
 	GetTickRepository(name string) (domain.TickRepository, error)
 	GetLiquidationRepository(name string) (domain.LiquidationRepository, error)
+}
+
+// NotifierService represents the notifier service contract
+type NotifierService interface {
+	Subscribe(topic string, client notify.Client, strategy notify.Strategy)
+	Notify(ctx context.Context, data any)
 }
 
 // Importer is responsible for importing data from an exchange and storing it in the database
@@ -28,7 +36,7 @@ type Importer struct {
 	tickHistory   *tickHistory
 	tickerHistory *tickerHistoryMap
 
-	notifier *notifier.Notifier
+	notifier NotifierService
 	logger   *zap.Logger
 }
 
@@ -155,7 +163,7 @@ func (i *Importer) startTickersImport(ctx context.Context) error {
 func (i *Importer) getInfo() string {
 	var info string
 	info += "\n________________________________________________________________________________\n"
-	info += fmt.Sprintf("Exchange: %s\n", i.exchange.GetName())
+	info += fmt.Sprintf("exchange: %s\n", i.exchange.GetName())
 	info += fmt.Sprintf("Tick history length: %d\n", i.tickHistory.Len())
 	info += fmt.Sprintf("Ticker history length: %d\n", len(i.tickerHistory.data))
 

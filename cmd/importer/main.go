@@ -19,11 +19,10 @@ func main() {
 
 	// Build the application
 	app, err := bootstrap.NewBuilder().
-		WithLogger().
-		WithExchange().
-		WithRepository().
+		WithLogger(ctx).
+		WithExchange(ctx).
+		WithRepository(ctx).
 		WithNotifiers(ctx).
-		WithImporter().
 		Build()
 	if err != nil {
 		fmt.Printf("Error building application: %v\n", err)

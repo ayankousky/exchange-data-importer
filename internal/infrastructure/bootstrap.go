@@ -28,10 +28,10 @@ func NewRedisClient(ctx context.Context, url string, maxConns int) (*redis.Clien
 }
 
 // NewMongoClient creates a new MongoDB client to inject into the other services
-func NewMongoClient(uri string) (*mongo.Client, error) {
+func NewMongoClient(ctx context.Context, uri string) (*mongo.Client, error) {
 	clientOptions := options.Client().ApplyURI(uri)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	// Connect to MongoDB

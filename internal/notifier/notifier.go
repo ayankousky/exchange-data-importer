@@ -52,17 +52,26 @@ func New(logger *zap.Logger) *Notifier {
 }
 
 // Subscribe subscribes client to a topic with a given strategy
-func (s *Notifier) Subscribe(topic Topic, client notify.Client, strategy notify.Strategy) {
+func (s *Notifier) Subscribe(topicString string, client notify.Client, strategy notify.Strategy) {
 	if client == nil {
 		s.logger.Error("Cannot subscribe with nil client",
-			zap.String("topic", string(topic)),
+			zap.String("topic", topicString),
 		)
 		return
 	}
 
 	if strategy == nil {
 		s.logger.Error("Cannot subscribe with nil strategy",
-			zap.String("topic", string(topic)),
+			zap.String("topic", topicString),
+		)
+		return
+	}
+
+	topic := Topic(topicString)
+	if err := topic.Validate(); err != nil {
+		s.logger.Error("Cannot subscribe to invalid topic",
+			zap.String("topic", topicString),
+			zap.Error(err),
 		)
 		return
 	}
