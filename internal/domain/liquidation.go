@@ -42,33 +42,11 @@ func (l *Liquidation) Validate() error {
 		}
 	}
 
+	// Validate the order - this already checks the order side validity
 	if err := l.Order.Validate(); err != nil {
 		return ValidationError{
 			Field: "Order",
 			Err:   err,
-		}
-	}
-
-	// Validate that Order.Side matches LiquidationType
-	switch l.Order.Side {
-	case OrderSide(LongLiquidation):
-		if l.Order.Side != OrderSideSell {
-			return ValidationError{
-				Field: "Order.Side",
-				Err:   fmt.Errorf("long liquidation must have SELL order side"),
-			}
-		}
-	case OrderSide(ShortLiquidation):
-		if l.Order.Side != OrderSideBuy {
-			return ValidationError{
-				Field: "Order.Side",
-				Err:   fmt.Errorf("short liquidation must have BUY order side"),
-			}
-		}
-	default:
-		return ValidationError{
-			Field: "Order.Side",
-			Err:   fmt.Errorf("invalid liquidation type"),
 		}
 	}
 

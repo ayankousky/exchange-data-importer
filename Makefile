@@ -31,8 +31,6 @@ dry_run:
 	.bin/exchange-importer --exchange.binance.enabled --notify.stdout.topics=TICK_INFO
 
 precommit:
-	
-precommit:
 	$(MAKE) lint
 	$(MAKE) test
 

@@ -107,6 +107,40 @@ func TestLiquidation_Validate(t *testing.T) {
 			wantErr:  true,
 			errField: "Order",
 		},
+		{
+			name: "invalid order price (zero)",
+			liq: Liquidation{
+				Order: Order{
+					EventAt:    defaultDate,
+					Symbol:     "BTCUSDT",
+					Side:       OrderSideSell,
+					Price:      0.0, // Invalid price
+					Quantity:   1.0,
+					TotalPrice: 0.0,
+				},
+				EventAt:  defaultDate,
+				StoredAt: defaultDate.Add(time.Second),
+			},
+			wantErr:  true,
+			errField: "Order",
+		},
+		{
+			name: "invalid order quantity (zero)",
+			liq: Liquidation{
+				Order: Order{
+					EventAt:    defaultDate,
+					Symbol:     "BTCUSDT",
+					Side:       OrderSideSell,
+					Price:      50000.0,
+					Quantity:   0.0, // Invalid quantity
+					TotalPrice: 0.0,
+				},
+				EventAt:  defaultDate,
+				StoredAt: defaultDate.Add(time.Second),
+			},
+			wantErr:  true,
+			errField: "Order",
+		},
 	}
 
 	for _, tt := range tests {
