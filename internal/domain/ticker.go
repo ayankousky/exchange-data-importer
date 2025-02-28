@@ -56,28 +56,29 @@ func (t *Ticker) CalculateIndicators(history *utils.RingBuffer[*Ticker], lastTic
 		return
 	}
 
-	if historyLength > 10 {
-		t.Change1m = mathutils.PercDiff(t.Bid, history.At(historyLength-2).Bid, 2)
+	t.Change1m = mathutils.PercDiff(t.Bid, history.At(historyLength-2).Bid, 2)
 
-		// Evaluate the last 10 Tickers for max/min
-		min10, max10 := math.MaxFloat64, -1*math.MaxFloat64
-		for i := historyLength - 10; i < historyLength; i++ {
-			h := history.At(i)
-			if h.Ask > max10 {
-				max10 = h.Ask
-			}
-			if h.Ask < min10 {
-				min10 = h.Ask
-			}
+	// Evaluate the last 10 Tickers for max/min
+	min10, max10 := math.MaxFloat64, -1*math.MaxFloat64
+	startPos := max(historyLength-10, 0)
+	for i := startPos; i < historyLength; i++ {
+		h := history.At(i)
+		if h.Ask > max10 {
+			max10 = h.Ask
 		}
-		t.Max10 = max10
-		t.Min10 = min10
-		t.Max10Diff = mathutils.PercDiff(t.Ask, t.Max10, 2)
-		t.Min10Diff = mathutils.PercDiff(t.Ask, t.Min10, 2)
-
-		t.AskChange = mathutils.PercDiff(t.Ask, prevTicker.Ask, 2)
-		t.BidChange = mathutils.PercDiff(t.Bid, prevTicker.Bid, 2)
+		if h.Ask < min10 {
+			min10 = h.Ask
+		}
 	}
+	t.Max10 = max10
+	t.Min10 = min10
+	t.Max10Diff = mathutils.PercDiff(t.Ask, t.Max10, 2)
+	t.Min10Diff = mathutils.PercDiff(t.Ask, t.Min10, 2)
+
+	t.AskChange = mathutils.PercDiff(t.Ask, prevTicker.Ask, 2)
+	t.BidChange = mathutils.PercDiff(t.Bid, prevTicker.Bid, 2)
+
+	// For last 20 minutes calculate: rsi
 	if historyLength > 21 {
 		t.Change20m = mathutils.PercDiff(t.Bid, history.At(historyLength-21).Bid, 2)
 

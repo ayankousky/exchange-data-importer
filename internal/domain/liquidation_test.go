@@ -9,18 +9,21 @@ import (
 
 func TestLiquidation_Validate(t *testing.T) {
 	defaultDate := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	validLongLiquidation := Order{
+
+	// Create valid orders for testing
+	validLongLiquidationOrder := Order{
 		EventAt:    defaultDate,
 		Symbol:     "BTCUSDT",
-		Side:       OrderSide(LongLiquidation),
+		Side:       OrderSideSell, // Long liquidation uses SELL side
 		Price:      50000.0,
 		Quantity:   1.0,
 		TotalPrice: 50000.0,
 	}
-	validShortLiquidation := Order{
+
+	validShortLiquidationOrder := Order{
 		EventAt:    defaultDate,
 		Symbol:     "BTCUSDT",
-		Side:       OrderSide(ShortLiquidation),
+		Side:       OrderSideBuy, // Short liquidation uses BUY side
 		Price:      50000.0,
 		Quantity:   1.0,
 		TotalPrice: 50000.0,
@@ -35,7 +38,7 @@ func TestLiquidation_Validate(t *testing.T) {
 		{
 			name: "valid long liquidation",
 			liq: Liquidation{
-				Order:    validLongLiquidation,
+				Order:    validLongLiquidationOrder,
 				EventAt:  defaultDate,
 				StoredAt: defaultDate.Add(time.Second),
 			},
@@ -44,7 +47,7 @@ func TestLiquidation_Validate(t *testing.T) {
 		{
 			name: "valid short liquidation",
 			liq: Liquidation{
-				Order:    validShortLiquidation,
+				Order:    validShortLiquidationOrder,
 				EventAt:  defaultDate,
 				StoredAt: defaultDate.Add(time.Second),
 			},
@@ -53,7 +56,7 @@ func TestLiquidation_Validate(t *testing.T) {
 		{
 			name: "zero EventAt time",
 			liq: Liquidation{
-				Order:    validLongLiquidation,
+				Order:    validLongLiquidationOrder,
 				EventAt:  time.Time{},
 				StoredAt: defaultDate,
 			},
@@ -63,12 +66,46 @@ func TestLiquidation_Validate(t *testing.T) {
 		{
 			name: "zero StoredAt time",
 			liq: Liquidation{
-				Order:    validLongLiquidation,
+				Order:    validLongLiquidationOrder,
 				EventAt:  defaultDate,
 				StoredAt: time.Time{},
 			},
 			wantErr:  true,
 			errField: "StoredAt",
+		},
+		{
+			name: "invalid order (missing symbol)",
+			liq: Liquidation{
+				Order: Order{
+					EventAt:    defaultDate,
+					Symbol:     "", // Invalid - missing symbol
+					Side:       OrderSideSell,
+					Price:      50000.0,
+					Quantity:   1.0,
+					TotalPrice: 50000.0,
+				},
+				EventAt:  defaultDate,
+				StoredAt: defaultDate.Add(time.Second),
+			},
+			wantErr:  true,
+			errField: "Order",
+		},
+		{
+			name: "invalid order side",
+			liq: Liquidation{
+				Order: Order{
+					EventAt:    defaultDate,
+					Symbol:     "BTCUSDT",
+					Side:       "INVALID", // Neither BUY nor SELL
+					Price:      50000.0,
+					Quantity:   1.0,
+					TotalPrice: 50000.0,
+				},
+				EventAt:  defaultDate,
+				StoredAt: defaultDate.Add(time.Second),
+			},
+			wantErr:  true,
+			errField: "Order",
 		},
 	}
 

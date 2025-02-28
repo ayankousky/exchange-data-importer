@@ -164,3 +164,141 @@ func TestTicker_Validate(t *testing.T) {
 		})
 	}
 }
+
+func TestTicker_CalculateIndicators_EdgeCases(t *testing.T) {
+	// Test for nil safety checks
+	t.Run("nil ticker", func(t *testing.T) {
+		var ticker *Ticker
+		history := utils.NewRingBuffer[*Ticker](10)
+		lastTick := &Tick{Data: map[TickerName]*Ticker{"BTCUSDT": {Symbol: "BTCUSDT"}}}
+
+		// This should not panic
+		ticker.CalculateIndicators(history, lastTick)
+	})
+
+	t.Run("nil lastTick", func(t *testing.T) {
+		ticker := &Ticker{Symbol: "BTCUSDT", Ask: 100, Bid: 99}
+		history := utils.NewRingBuffer[*Ticker](10)
+
+		// This should not panic
+		ticker.CalculateIndicators(history, nil)
+
+		// Values should remain unchanged
+		assert.Equal(t, TickerName("BTCUSDT"), ticker.Symbol)
+		assert.Equal(t, 100.0, ticker.Ask)
+		assert.Equal(t, 99.0, ticker.Bid)
+		assert.Equal(t, 0.0, ticker.Change1m)
+	})
+
+	t.Run("symbol not in lastTick", func(t *testing.T) {
+		ticker := &Ticker{Symbol: "BTCUSDT", Ask: 100, Bid: 99}
+		history := utils.NewRingBuffer[*Ticker](10)
+		lastTick := &Tick{Data: map[TickerName]*Ticker{"ETHUSDT": {Symbol: "ETHUSDT"}}}
+
+		// This should not panic
+		ticker.CalculateIndicators(history, lastTick)
+
+		// Values should remain unchanged
+		assert.Equal(t, TickerName("BTCUSDT"), ticker.Symbol)
+		assert.Equal(t, 100.0, ticker.Ask)
+		assert.Equal(t, 99.0, ticker.Bid)
+		assert.Equal(t, 0.0, ticker.Change1m)
+	})
+
+	t.Run("nil lastTick.Data", func(t *testing.T) {
+		ticker := &Ticker{Symbol: "BTCUSDT", Ask: 100, Bid: 99}
+		history := utils.NewRingBuffer[*Ticker](10)
+		lastTick := &Tick{} // Data is nil
+
+		// This should not panic
+		ticker.CalculateIndicators(history, lastTick)
+
+		// Values should remain unchanged
+		assert.Equal(t, TickerName("BTCUSDT"), ticker.Symbol)
+		assert.Equal(t, 100.0, ticker.Ask)
+		assert.Equal(t, 99.0, ticker.Bid)
+		assert.Equal(t, 0.0, ticker.Change1m)
+	})
+
+	t.Run("history length < 2", func(t *testing.T) {
+		ticker := &Ticker{Symbol: "BTCUSDT", Ask: 100, Bid: 99}
+		history := utils.NewRingBuffer[*Ticker](10)
+
+		// Add just one item to history
+		history.Push(&Ticker{Symbol: "BTCUSDT", Ask: 95, Bid: 94})
+
+		lastTick := &Tick{Data: map[TickerName]*Ticker{
+			"BTCUSDT": {Symbol: "BTCUSDT", Ask: 95, Bid: 94},
+		}}
+
+		// This should not compute anything
+		ticker.CalculateIndicators(history, lastTick)
+
+		// Values should remain unchanged
+		assert.Equal(t, 0.0, ticker.Change1m)
+		assert.Equal(t, 0.0, ticker.Change20m)
+		assert.Equal(t, 0.0, ticker.Max10)
+		assert.Equal(t, 0.0, ticker.Min10)
+	})
+
+	t.Run("history length between 2 and 21", func(t *testing.T) {
+		ticker := &Ticker{Symbol: "BTCUSDT", Ask: 100, Bid: 99}
+		history := utils.NewRingBuffer[*Ticker](10)
+
+		// Add 5 items to history
+		for i := 0; i < 5; i++ {
+			history.Push(&Ticker{
+				Symbol: "BTCUSDT",
+				Ask:    95.0 + float64(i),
+				Bid:    94.0 + float64(i),
+			})
+		}
+
+		lastTick := &Tick{Data: map[TickerName]*Ticker{
+			"BTCUSDT": {Symbol: "BTCUSDT", Ask: 95, Bid: 94},
+		}}
+
+		// Execute
+		ticker.CalculateIndicators(history, lastTick)
+
+		// Should calculate 1m change but not 20m change
+		assert.NotEqual(t, 0.0, ticker.Change1m)
+		assert.Equal(t, 0.0, ticker.Change20m)
+		assert.Equal(t, 0.0, ticker.RSI20)
+
+		// Max10 and Min10 should be calculated
+		assert.NotEqual(t, 0.0, ticker.Max10)
+		assert.NotEqual(t, 0.0, ticker.Min10)
+	})
+
+	t.Run("history length >= 21", func(t *testing.T) {
+		ticker := &Ticker{Symbol: "BTCUSDT", Ask: 100, Bid: 99}
+		history := utils.NewRingBuffer[*Ticker](30)
+
+		// Add 25 items to history with increasing values
+		for i := 0; i < 25; i++ {
+			history.Push(&Ticker{
+				Symbol: "BTCUSDT",
+				Ask:    95.0 + float64(i),
+				Bid:    94.0 + float64(i),
+			})
+		}
+
+		lastTick := &Tick{Data: map[TickerName]*Ticker{
+			"BTCUSDT": {Symbol: "BTCUSDT", Ask: 99, Bid: 98},
+		}}
+
+		// Execute
+		ticker.CalculateIndicators(history, lastTick)
+
+		// Should calculate all indicators
+		assert.NotEqual(t, 0.0, ticker.Change1m)
+		assert.NotEqual(t, 0.0, ticker.Change20m)
+		assert.NotEqual(t, 0.0, ticker.RSI20)
+		assert.NotEqual(t, 0.0, ticker.Max10)
+		assert.NotEqual(t, 0.0, ticker.Min10)
+
+		// RSI for continuously increasing values should be near 100
+		assert.InDelta(t, 100.0, ticker.RSI20, 5.0)
+	})
+}

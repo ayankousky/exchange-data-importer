@@ -174,3 +174,123 @@ func TestTick_Validate(t *testing.T) {
 		})
 	}
 }
+
+func TestCalculateIndicators_EdgeCases(t *testing.T) {
+	t.Run("empty history", func(t *testing.T) {
+		// Create a new empty history
+		history := utils.NewRingBuffer[*Tick](MaxTickHistory)
+
+		// Create a new tick with initial values
+		tick := &Tick{
+			Avg: TickAvg{
+				AskChange: 0.5,
+				BidChange: 0.5,
+			},
+			Data: map[TickerName]*Ticker{
+				"BTCUSDT": {
+					Symbol: "BTCUSDT",
+					Ask:    1000,
+					Bid:    990,
+				},
+			},
+		}
+
+		// Initial values that should remain unchanged
+		initialAvgAskChange := tick.Avg.AskChange
+		initialAvgBidChange := tick.Avg.BidChange
+
+		// Call CalculateIndicators with empty history
+		tick.CalculateIndicators(history)
+
+		// Values should remain unchanged
+		assert.Equal(t, initialAvgAskChange, tick.Avg.AskChange, "AskChange should remain unchanged with empty history")
+		assert.Equal(t, initialAvgBidChange, tick.Avg.BidChange, "BidChange should remain unchanged with empty history")
+		assert.Equal(t, 0.0, tick.AvgBuy10, "AvgBuy10 should be zero with empty history")
+	})
+
+	t.Run("history with only one item", func(t *testing.T) {
+		// Create history with just one item
+		history := utils.NewRingBuffer[*Tick](MaxTickHistory)
+		tick := &Tick{
+			Avg: TickAvg{
+				AskChange: 0.5,
+				BidChange: 0.5,
+			},
+			Data: map[TickerName]*Ticker{
+				"BTCUSDT": {
+					Symbol: "BTCUSDT",
+					Ask:    1000,
+					Bid:    990,
+				},
+			},
+		}
+		history.Push(tick)
+
+		// Initial values that should remain unchanged
+		initialAvgAskChange := tick.Avg.AskChange
+		initialAvgBidChange := tick.Avg.BidChange
+
+		// Call CalculateIndicators with history of length 1
+		tick.CalculateIndicators(history)
+
+		// Values should remain unchanged
+		assert.Equal(t, initialAvgAskChange, tick.Avg.AskChange, "AskChange should remain unchanged with history length of 1")
+		assert.Equal(t, initialAvgBidChange, tick.Avg.BidChange, "BidChange should remain unchanged with history length of 1")
+		assert.Equal(t, 0.0, tick.AvgBuy10, "AvgBuy10 should be zero with history length of 1")
+	})
+
+	t.Run("history with new ticker not in previous tick", func(t *testing.T) {
+		// Create history with two items
+		history := utils.NewRingBuffer[*Tick](MaxTickHistory)
+
+		// First tick with only ETHUSDT
+		firstTick := &Tick{
+			Data: map[TickerName]*Ticker{
+				"ETHUSDT": {
+					Symbol: "ETHUSDT",
+					Ask:    2000,
+					Bid:    1990,
+				},
+			},
+			Avg: TickAvg{
+				TickersCount: 1,
+			},
+		}
+		history.Push(firstTick)
+
+		// Second tick with both ETHUSDT and BTCUSDT (new ticker)
+		secondTick := &Tick{
+			Data: map[TickerName]*Ticker{
+				"ETHUSDT": {
+					Symbol:    "ETHUSDT",
+					Ask:       2100,
+					Bid:       2090,
+					Change1m:  1.5,
+					Change20m: 2.5,
+					Max10:     2200,
+					Min10:     2000,
+				},
+				"BTCUSDT": { // New ticker not in previous tick
+					Symbol:    "BTCUSDT",
+					Ask:       30000,
+					Bid:       29900,
+					Change1m:  0.5,
+					Change20m: 1.0,
+					Max10:     31000,
+					Min10:     29000,
+				},
+			},
+			Avg: TickAvg{
+				TickersCount: 2,
+			},
+		}
+		history.Push(secondTick)
+
+		// Call CalculateIndicators
+		secondTick.CalculateIndicators(history)
+
+		// Only ETHUSDT should contribute to the averages
+		// BTCUSDT should be skipped since it's not in the previous tick
+		assert.Equal(t, int16(1), secondTick.Avg.TickersCount, "Only one ticker should be counted in averages")
+	})
+}

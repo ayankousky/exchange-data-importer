@@ -60,7 +60,7 @@ type TickRepository interface {
 
 // CalculateIndicators calculates the indicators for the current tick based on the history data
 func (t *Tick) CalculateIndicators(history *utils.RingBuffer[*Tick]) {
-	if history.Len() <= 1 {
+	if history.Len() < 2 {
 		return
 	}
 	prevTick := history.At(history.Len() - 2)
