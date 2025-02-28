@@ -24,14 +24,22 @@ Simple and extensible service for importing market data (tickers and liquidation
   /notifier         # Notification system and strategies
 ```
 
-## Quick Start
+## Build and Run
 
-Build and run:
-
+### Quick Start
 ```bash
-# Build
-go build -o exchange-importer cmd/importer/main.go
+# Build and run in one command
+make dry_run
+```
 
+### Manual Build
+```bash
+# Build the application
+go build -o .bin/exchange-importer cmd/importer/main.go
+```
+
+### Manual Run
+```bash
 # Run with basic configuration (show market averages in console)
 ./exchange-importer --exchange.binance.enabled --notify.stdout.topics=TICK_INFO
 ```
@@ -61,7 +69,7 @@ TIME | MKTS | Max10 % | Min10 % | AVG BUY | LL5 | LL60 | SL2 | SL10
 
 All values represent averages across all tracked markets (trading pairs):
 - `TIME`: Timestamp of the data
-- `MKTS`: Number of markets being tracked
+- `MKTS`: Number of markets being tracked in current tick
 - `Max10 %`: Average maximum price change in last 10 minutes
 - `Min10 %`: Average minimum price change in last 10 minutes
 - `AVG BUY`: Average buy price change for the last tick
@@ -69,3 +77,5 @@ All values represent averages across all tracked markets (trading pairs):
 - `LL60`: Total long liquidations in last 60 seconds
 - `SL2`: Total short liquidations in last 2 seconds
 - `SL10`: Total short liquidations in last 10 seconds
+
+**Note:** If history does not exist, you may need to wait up to 1 minute for some columns to appear.

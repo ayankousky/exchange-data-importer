@@ -33,7 +33,7 @@ func TestNewBinance(t *testing.T) {
 		{
 			name: "empty config",
 			cfg:  Config{},
-			want: "",
+			want: "Binance perpetual",
 		},
 	}
 

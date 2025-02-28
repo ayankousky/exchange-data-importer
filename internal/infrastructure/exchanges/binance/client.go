@@ -58,6 +58,9 @@ func NewBinance(cfg Config) *Client {
 	if cfg.APIUrl == "" {
 		cfg.APIUrl = FuturesAPIURL
 	}
+	if cfg.Name == "" {
+		cfg.Name = "Binance perpetual"
+	}
 
 	return &Client{
 		name:       cfg.Name,

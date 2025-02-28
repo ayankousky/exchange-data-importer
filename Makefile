@@ -24,7 +24,10 @@ gen:
 
 build:
 	mkdir -p .bin
-	go build -ldflags "-X main.revision=$(REV) -s -w" -o .bin/exchange-importer.$(BRANCH) cmd/importer/main.go
-	cp .bin/exchange-importer.$(BRANCH) .bin/exchange-importer
+	go build -ldflags "-X main.revision=$(REV) -s -w" -o .bin/exchange-importer cmd/importer/main.go
 
-.PHONY: lint test rtest gen
+dry_run:
+	$(MAKE) build
+	.bin/exchange-importer --exchange.binance.enabled --notify.stdout.topics=TICK_INFO
+
+.PHONY: lint test rtest gen build dry_run
