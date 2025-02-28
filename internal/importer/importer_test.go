@@ -182,7 +182,8 @@ func TestInitHistory(t *testing.T) {
 		return ticks, nil
 	}
 
-	ts.importer.initHistory(ctx)
+	err := ts.importer.initHistory(ctx)
+	assert.NoError(t, err)
 
 	assert.Equal(t, domain.MaxTickHistory, ts.importer.tickHistory.Len())
 	assert.Equal(t, 17, ts.importer.tickerHistory.Get("BTCUSDT").Len())
@@ -195,6 +196,13 @@ func TestInitHistory(t *testing.T) {
 	assert.Equal(t, 604932.5165, btcHistory.At(btcHistory.Len()-2).Ask)
 	assert.Equal(t, 573615.9065, btcHistory.At(btcHistory.Len()-3).Ask)
 	assert.Equal(t, lastTick.Data["BTCUSDT"].Ask, btcHistory.At(btcHistory.Len()-1).Ask)
+
+	// Test error scenario
+	ts.tickRepo.GetHistorySinceFunc = func(ctx context.Context, since time.Time) ([]domain.Tick, error) {
+		return nil, fmt.Errorf("database error")
+	}
+	err = ts.importer.initHistory(ctx)
+	assert.Error(t, err, "Error in fetching history should return an error")
 }
 
 func TestBuildTick(t *testing.T) {
@@ -521,5 +529,180 @@ func TestTickerHistoryDataRace(t *testing.T) {
 		minute := ticker.CreatedAt.Truncate(time.Minute)
 		assert.False(t, minutes[minute], "Found duplicate minute in history")
 		minutes[minute] = true
+	}
+}
+
+func TestConvertLiquidationToDomain(t *testing.T) {
+	// Setup test suite
+	ts := setupTest()
+
+	// Fixed test time for consistency
+	testTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name       string
+		input      exchanges.Liquidation
+		want       domain.Liquidation
+		setupClock func() time.Time
+	}{
+		{
+			name: "should convert long liquidation correctly",
+			input: exchanges.Liquidation{
+				Symbol:     "BTCUSDT",
+				Side:       "SELL",
+				Price:      50000.0,
+				Quantity:   1.5,
+				TotalPrice: 75000.0,
+				EventAt:    testTime,
+			},
+			setupClock: func() time.Time {
+				return testTime.Add(time.Second)
+			},
+			want: domain.Liquidation{
+				Order: domain.Order{
+					Symbol:     "BTCUSDT",
+					EventAt:    testTime,
+					Side:       domain.OrderSideSell,
+					Price:      50000.0,
+					Quantity:   1.5,
+					TotalPrice: 75000.0,
+				},
+				EventAt:  testTime,
+				StoredAt: testTime.Add(time.Second),
+			},
+		},
+		{
+			name: "should convert short liquidation correctly",
+			input: exchanges.Liquidation{
+				Symbol:     "ETHUSDT",
+				Side:       "BUY",
+				Price:      3000.0,
+				Quantity:   10.0,
+				TotalPrice: 30000.0,
+				EventAt:    testTime,
+			},
+			setupClock: func() time.Time {
+				return testTime.Add(time.Second * 2)
+			},
+			want: domain.Liquidation{
+				Order: domain.Order{
+					Symbol:     "ETHUSDT",
+					EventAt:    testTime,
+					Side:       domain.OrderSideBuy,
+					Price:      3000.0,
+					Quantity:   10.0,
+					TotalPrice: 30000.0,
+				},
+				EventAt:  testTime,
+				StoredAt: testTime.Add(time.Second * 2),
+			},
+		},
+		{
+			name: "should handle zero values correctly",
+			input: exchanges.Liquidation{
+				Symbol:     "SOLUSDT",
+				Side:       "SELL",
+				Price:      0.0,
+				Quantity:   0.0,
+				TotalPrice: 0.0,
+				EventAt:    testTime,
+			},
+			setupClock: func() time.Time {
+				return testTime.Add(time.Second * 3)
+			},
+			want: domain.Liquidation{
+				Order: domain.Order{
+					Symbol:     "SOLUSDT",
+					EventAt:    testTime,
+					Side:       domain.OrderSideSell,
+					Price:      0.0,
+					Quantity:   0.0,
+					TotalPrice: 0.0,
+				},
+				EventAt:  testTime,
+				StoredAt: testTime.Add(time.Second * 3),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ts.importer.convertLiquidationToDomain(tt.input)
+
+			// Verify result matches expected values
+			assert.Equal(t, tt.want.Order.Symbol, result.Order.Symbol)
+			assert.Equal(t, tt.want.Order.EventAt, result.Order.EventAt)
+			assert.Equal(t, tt.want.Order.Side, result.Order.Side)
+			assert.Equal(t, tt.want.Order.Price, result.Order.Price)
+			assert.Equal(t, tt.want.Order.Quantity, result.Order.Quantity)
+			assert.Equal(t, tt.want.Order.TotalPrice, result.Order.TotalPrice)
+			assert.Equal(t, tt.want.EventAt, result.EventAt)
+
+			assert.NotZero(t, result.StoredAt)
+			assert.True(t, result.StoredAt.After(result.EventAt) || result.StoredAt.Equal(result.EventAt))
+		})
+	}
+}
+
+func TestConvertLiquidationToDomainValidation(t *testing.T) {
+	ts := setupTest()
+
+	// Test that converted liquidations pass validation
+	testTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name    string
+		input   exchanges.Liquidation
+		wantErr bool
+	}{
+		{
+			name: "valid long liquidation should pass validation",
+			input: exchanges.Liquidation{
+				Symbol:     "BTCUSDT",
+				Side:       "SELL",
+				Price:      50000.0,
+				Quantity:   1.5,
+				TotalPrice: 75000.0,
+				EventAt:    testTime,
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid short liquidation should pass validation",
+			input: exchanges.Liquidation{
+				Symbol:     "ETHUSDT",
+				Side:       "BUY",
+				Price:      3000.0,
+				Quantity:   10.0,
+				TotalPrice: 30000.0,
+				EventAt:    testTime,
+			},
+			wantErr: false,
+		},
+		{
+			name: "zero price should not pass validation",
+			input: exchanges.Liquidation{
+				Symbol:     "SOLUSDT",
+				Side:       "SELL",
+				Price:      0.0,
+				Quantity:   5.0,
+				TotalPrice: 0.0,
+				EventAt:    testTime,
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			domainLiq := ts.importer.convertLiquidationToDomain(tt.input)
+
+			err := domainLiq.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
 	}
 }

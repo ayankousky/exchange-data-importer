@@ -15,6 +15,8 @@ import (
 //go:generate moq --out mocks/repository_factory.go --pkg mocks --with-resets --skip-ensure . RepositoryFactory
 //go:generate moq --out mocks/notifier.go --pkg mocks --with-resets --skip-ensure . NotifierService
 
+const defaultTickInterval = time.Second // defines the default time interval between each tick operation in the import loop.
+
 // RepositoryFactory is a contract for creating repositories
 type RepositoryFactory interface {
 	GetTickRepository(name string) (domain.TickRepository, error)
@@ -105,18 +107,7 @@ func (i *Importer) startLiquidationsImport(ctx context.Context) error {
 				return
 			case liq := <-liqChan:
 				// Convert the `exchanges.Liquidation` to your domain model
-				domainLiq := domain.Liquidation{
-					Order: domain.Order{
-						Symbol:     domain.TickerName(liq.Symbol),
-						EventAt:    liq.EventAt,
-						Side:       domain.OrderSide(liq.Side),
-						Price:      liq.Price,
-						Quantity:   liq.Quantity,
-						TotalPrice: liq.TotalPrice,
-					},
-					EventAt:  liq.EventAt,
-					StoredAt: time.Now(),
-				}
+				domainLiq := i.convertLiquidationToDomain(liq)
 
 				if err := domainLiq.Validate(); err != nil {
 					i.logger.Error("Liquidation validation failed", zap.Error(err))
@@ -137,11 +128,24 @@ func (i *Importer) startLiquidationsImport(ctx context.Context) error {
 	return nil
 }
 
+// convertLiquidationToDomain converts the exchange Liquidation to a domain Liquidation
+func (i *Importer) convertLiquidationToDomain(liq exchanges.Liquidation) domain.Liquidation {
+	return domain.Liquidation{
+		Order: domain.Order{
+			Symbol:     domain.TickerName(liq.Symbol),
+			EventAt:    liq.EventAt,
+			Side:       domain.OrderSide(liq.Side),
+			Price:      liq.Price,
+			Quantity:   liq.Quantity,
+			TotalPrice: liq.TotalPrice,
+		},
+		EventAt:  liq.EventAt,
+		StoredAt: time.Now(),
+	}
+}
+
 // StartTickersImport starts a loop that imports data from the exchange periodically.
 func (i *Importer) startTickersImport(ctx context.Context) error {
-
-	interval := time.Second // temporary here, should be configurable later
-
 	// Initialize the history data for calculating tick indicators
 	if err := i.initHistory(ctx); err != nil {
 		return fmt.Errorf("failed to init history: %w", err)
@@ -153,10 +157,10 @@ func (i *Importer) startTickersImport(ctx context.Context) error {
 	time.Sleep(time.Until(nextSecond))
 
 	// Start the import loop with the specified interval
-	timeTicker := time.NewTicker(interval)
+	timeTicker := time.NewTicker(defaultTickInterval)
 	defer timeTicker.Stop()
 
-	i.logger.Info(i.getInfo())
+	i.logger.Info(i.generateImporterInfo())
 	for {
 		select {
 		case <-ctx.Done():
@@ -172,7 +176,7 @@ func (i *Importer) startTickersImport(ctx context.Context) error {
 }
 
 // GetInfo returns a string with the current state of the Importer
-func (i *Importer) getInfo() string {
+func (i *Importer) generateImporterInfo() string {
 	var info string
 	info += "\n________________________________________________________________________________\n"
 	info += fmt.Sprintf("exchange: %s\n", i.exchange.GetName())
