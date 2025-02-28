@@ -8,7 +8,7 @@ import (
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/notify"
-	"github.com/ayankousky/exchange-data-importer/internal/notifier"
+	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/telemetry"
 	"go.uber.org/zap"
 )
 
@@ -36,30 +36,41 @@ type Importer struct {
 	tickHistory   *tickHistory
 	tickerHistory *tickerHistoryMap
 
-	notifier NotifierService
-	logger   *zap.Logger
+	notifier  NotifierService
+	telemetry telemetry.Provider
+	logger    *zap.Logger
+}
+
+// Config represents the configuration for initializing the importer
+type Config struct {
+	Exchange          exchanges.Exchange
+	RepositoryFactory RepositoryFactory
+	NotifierService   NotifierService
+	Telemetry         telemetry.Provider
+	Logger            *zap.Logger
 }
 
 // New creates a new Importer
-func New(exchange exchanges.Exchange, repositoryFactory RepositoryFactory, logger *zap.Logger) *Importer {
-	tickRepository, err := repositoryFactory.GetTickRepository(exchange.GetName())
+func New(cfg *Config) *Importer {
+	tickRepository, err := cfg.RepositoryFactory.GetTickRepository(cfg.Exchange.GetName())
 	if err != nil {
 		return nil
 	}
-	liquidationRepository, err := repositoryFactory.GetLiquidationRepository(exchange.GetName())
+	liquidationRepository, err := cfg.RepositoryFactory.GetLiquidationRepository(cfg.Exchange.GetName())
 	if err != nil {
 		return nil
 	}
 	return &Importer{
-		exchange:              exchange,
+		exchange:              cfg.Exchange,
 		tickRepository:        tickRepository,
 		liquidationRepository: liquidationRepository,
 
 		tickHistory:   newTickHistory(domain.MaxTickHistory),
 		tickerHistory: newTickerHistoryMap(),
 
-		notifier: notifier.New(logger),
-		logger:   logger,
+		notifier:  cfg.NotifierService,
+		telemetry: cfg.Telemetry,
+		logger:    cfg.Logger,
 	}
 }
 
@@ -113,11 +124,12 @@ func (i *Importer) startLiquidationsImport(ctx context.Context) error {
 				}
 
 				// Store it
-				err := i.liquidationRepository.Create(context.Background(), domainLiq)
+				err := i.liquidationRepository.Create(ctx, domainLiq)
 				if err != nil {
 					i.logger.Error("Failed to store liquidation", zap.Error(err))
 				}
 			case err := <-errChan:
+				i.telemetry.IncrementCounter(telemetryLiquidationsErrors, 1, fmt.Sprintf("exchange:%s", i.exchange.GetName()))
 				i.logger.Error("Error on liquidation stream", zap.Error(err))
 			}
 		}

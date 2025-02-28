@@ -11,9 +11,10 @@ type Options struct {
 	Env         string `long:"env" env:"ENV" description:"Environment"`
 	ServiceName string `long:"service-name" env:"SERVICE_NAME" description:"Service name"`
 
-	Repository RepositoryOptions `group:"Repository" namespace:"Repository" env-namespace:"REPOSITORY"`
-	Exchange   ExchangeOptions   `group:"Exchange" namespace:"Exchange" env-namespace:"EXCHANGE"`
-	Notify     NotifyOptions     `group:"Notify" namespace:"Notify" env-namespace:"NOTIFY"`
+	Repository RepositoryOptions `group:"repository" namespace:"repository" env-namespace:"REPOSITORY"`
+	Exchange   ExchangeOptions   `group:"exchange" namespace:"exchange" env-namespace:"EXCHANGE"`
+	Notify     NotifyOptions     `group:"notify" namespace:"notify" env-namespace:"NOTIFY"`
+	Telemetry  TelemetryOptions  `group:"telemetry" namespace:"telemetry" env-namespace:"TELEMETRY"`
 }
 
 // RepositoryOptions holds configuration Options for repositories to use (only 1 allowed)
@@ -66,6 +67,18 @@ type NotifyOptions struct {
 	Stdout struct {
 		Topics string `long:"topics" env:"TOPICS" description:"Comma-separated list of topics"`
 	} `group:"stdout" namespace:"stdout" env-namespace:"STDOUT"`
+}
+
+// TelemetryOptions holds configuration settings for telemetry
+type TelemetryOptions struct {
+	Datadog struct {
+		Enabled          bool   `long:"enabled" env:"ENABLED" description:"Enable Datadog telemetry"`
+		AgentHost        string `long:"agent-host" env:"AGENT_HOST" description:"Datadog agent host"`
+		AgentPort        string `long:"agent-port" env:"AGENT_PORT" description:"Datadog agent port"`
+		EnabledTracing   bool   `long:"enabled-tracing" env:"ENABLED_TRACING" description:"Enable Datadog tracing"`
+		EnabledMetrics   bool   `long:"enabled-metrics" env:"ENABLED_METRICS" description:"Enable Datadog metrics"`
+		EnabledProfiling bool   `long:"enabled-profiling" env:"ENABLED_PROFILING" description:"Enable Datadog profiling"`
+	} `group:"datadog" namespace:"datadog" env-namespace:"DATADOG"`
 }
 
 // ParseOptions parses command line arguments and environment variables

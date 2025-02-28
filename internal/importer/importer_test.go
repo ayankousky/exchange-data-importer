@@ -14,6 +14,7 @@ import (
 	exchangeMocks "github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges/mocks"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/notify"
 	notifyMock "github.com/ayankousky/exchange-data-importer/internal/infrastructure/notify/mocks"
+	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/telemetry"
 	"github.com/ayankousky/exchange-data-importer/internal/notifier"
 	"github.com/ayankousky/exchange-data-importer/pkg/utils/mathutils"
 	"github.com/stretchr/testify/assert"
@@ -73,12 +74,22 @@ func setupTest() *testSuite {
 		},
 	}
 
+	telemetryProvider := &telemetry.NoopProvider{}
+
+	cfg := &Config{
+		Exchange:          exchange,
+		RepositoryFactory: repoFactory,
+		NotifierService:   notifier.New(zap.NewNop()),
+		Telemetry:         telemetryProvider,
+		Logger:            zap.NewNop(),
+	}
+
 	return &testSuite{
 		exchange:    exchange,
 		repoFactory: repoFactory,
 		tickRepo:    tickRepo,
 		liqRepo:     liqRepo,
-		importer:    New(exchange, repoFactory, zap.NewNop()),
+		importer:    New(cfg),
 	}
 }
 
@@ -355,6 +366,7 @@ func TestNotifyNewTick(t *testing.T) {
 					assert.NotNil(t, call.Ctx)
 				}
 			}
+
 			assert.Equal(t, tt.wantCalls, totalCalls, "unexpected number of notification calls")
 		})
 	}

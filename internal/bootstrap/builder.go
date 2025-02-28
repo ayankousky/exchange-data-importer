@@ -7,6 +7,8 @@ import (
 
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/repository/memory"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/repository/sqlite"
+	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/telemetry"
+	"github.com/ayankousky/exchange-data-importer/internal/notifier"
 	notificationStrategies "github.com/ayankousky/exchange-data-importer/internal/notifier/strategies"
 	"go.uber.org/zap"
 
@@ -31,6 +33,7 @@ func NewBuilder() *Builder {
 
 	app.logger, _ = infrastructure.NewLogger("development", "exchange-data-importer")
 	app.repositoryFactory = memory.NewInMemoryRepoFactory()
+	app.telemetry = &telemetry.NoopProvider{}
 
 	builder := &Builder{
 		app: app,
@@ -220,13 +223,49 @@ func (b *Builder) WithNotifiers(ctx context.Context) *Builder {
 	return b
 }
 
+// WithTelemetry initializes telemetry (e.g., metrics and tracing)
+func (b *Builder) WithTelemetry(ctx context.Context) *Builder {
+	if b.err != nil {
+		return b
+	}
+
+	// Initialize datadog provider
+	if b.app.options.Telemetry.Datadog.Enabled {
+		datadogConfig := &telemetry.DatadogConfig{
+			AgentHost:       b.app.options.Telemetry.Datadog.AgentHost,
+			AgentPort:       b.app.options.Telemetry.Datadog.AgentPort,
+			ServiceName:     b.app.options.ServiceName,
+			ServiceEnv:      b.app.options.Env,
+			EnableTracing:   b.app.options.Telemetry.Datadog.EnabledTracing,
+			EnableMetrics:   b.app.options.Telemetry.Datadog.EnabledMetrics,
+			EnableProfiling: b.app.options.Telemetry.Datadog.EnabledProfiling,
+		}
+
+		fmt.Printf("Datadog Config: %+v\n", datadogConfig)
+		telemetryProvider := telemetry.NewDatadogProvider(datadogConfig)
+		if err := telemetryProvider.Initialize(ctx); err != nil {
+			b.err = fmt.Errorf("initializing telemetry provider: %w", err)
+		}
+		b.app.telemetry = telemetryProvider
+	}
+
+	return b
+}
+
 // Build returns the built App instance
 func (b *Builder) Build() (*App, error) {
 	if b.err != nil {
 		return nil, b.err
 	}
+	notifier := notifier.New(b.app.logger) // currently hardcoded as there is no alternatives
 
-	b.app.importer = importer.New(b.app.exchange, b.app.repositoryFactory, b.app.logger)
+	b.app.importer = importer.New(&importer.Config{
+		Exchange:          b.app.exchange,
+		RepositoryFactory: b.app.repositoryFactory,
+		NotifierService:   notifier,
+		Logger:            b.app.logger,
+		Telemetry:         b.app.telemetry,
+	})
 
 	if b.app.exchange == nil || b.app.importer == nil {
 		return nil, fmt.Errorf("missing required dependencies")

@@ -23,6 +23,7 @@ func main() {
 		WithExchange(ctx).
 		WithRepository(ctx).
 		WithNotifiers(ctx).
+		WithTelemetry(ctx).
 		Build()
 	if err != nil {
 		fmt.Printf("Error building application: %v\n", err)

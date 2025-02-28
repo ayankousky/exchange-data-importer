@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/telemetry"
 	"go.uber.org/zap"
 
 	"github.com/ayankousky/exchange-data-importer/internal/importer"
@@ -18,6 +19,7 @@ type App struct {
 	importer          *importer.Importer
 	repositoryFactory importer.RepositoryFactory
 	notifiers         []NotifierConfig
+	telemetry         telemetry.Provider
 	options           *Options
 }
 

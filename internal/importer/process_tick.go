@@ -13,6 +13,9 @@ import (
 )
 
 func (i *Importer) importTick(ctx context.Context) error {
+	span, ctx := i.telemetry.StartSpan(ctx, telemetrySpanImportTick)
+	defer span.Finish()
+
 	startAt := time.Now()
 
 	// Fetch tickers from the exchange
@@ -52,7 +55,23 @@ func (i *Importer) importTick(ctx context.Context) error {
 
 // fetchTickers is a simple wrapper that calls exchange.FetchTickers
 func (i *Importer) fetchTickers(ctx context.Context) ([]exchanges.Ticker, error) {
-	return i.exchange.FetchTickers(ctx)
+	span, ctx := i.telemetry.StartSpan(ctx, telemetrySpanFetchTickers)
+	defer span.Finish()
+
+	startTime := time.Now()
+	tickers, err := i.exchange.FetchTickers(ctx)
+	i.telemetry.Timing(telemetryTickFetchDuration, time.Since(startTime))
+	i.telemetry.Gauge(telemetryTickFetchTickersCount, float64(len(tickers)))
+
+	if err != nil {
+		span.SetTag("error", true)
+		span.SetTag("error.message", err.Error())
+		i.telemetry.IncrementCounter(telemetryTickFetchErrors, 1)
+	} else {
+		span.SetTag("tickers.count", len(tickers))
+	}
+
+	return tickers, err
 }
 
 // buildTick calculates indicators and populates domain.Tick.
@@ -60,9 +79,13 @@ func (i *Importer) fetchTickers(ctx context.Context) ([]exchanges.Ticker, error)
 // Note: For a small history length, concurrent processing is unnecessary.
 // We can use a single-thread worker for exchanges where large calculations (such as RSI200) are not required.
 func (i *Importer) buildTick(ctx context.Context, tick *domain.Tick, eTickers []exchanges.Ticker) {
+	span, ctx := i.telemetry.StartSpan(ctx, telemetrySpanBuildTick)
+	defer span.Finish()
+
 	lastTick, _ := i.getLastTick()
 
 	// Set liquidations data
+	liqStart := time.Now()
 	liquidationsHistory, err := i.liquidationRepository.GetLiquidationsHistory(ctx, tick.StartAt)
 	if err != nil {
 		i.logger.Error("Error getting liquidations history", zap.Error(err))
@@ -74,6 +97,8 @@ func (i *Importer) buildTick(ctx context.Context, tick *domain.Tick, eTickers []
 	tick.SL1 = liquidationsHistory.ShortLiquidations1s
 	tick.SL2 = liquidationsHistory.ShortLiquidations2s
 	tick.SL10 = liquidationsHistory.ShortLiquidations10s
+
+	i.telemetry.Timing(telemetryTickBuildSetLiquidations, time.Since(liqStart))
 
 	// Handle tickers data in parallel
 	wg := sync.WaitGroup{}
@@ -113,11 +138,18 @@ func (i *Importer) buildTick(ctx context.Context, tick *domain.Tick, eTickers []
 		wg.Wait()
 		close(resultChannel)
 	}()
+
+	tickersProcessed := 0
 	for processedTicker := range resultChannel {
 		tick.SetTicker(processedTicker)
+		tickersProcessed++
 	}
 
-	// Calculate tick averages
+	i.telemetry.Gauge(telemetryTickBuildTickersProcessed, float64(tickersProcessed))
+
+	// Calculate tick indicators
+	indicatorsStart := time.Now()
 	i.addTickHistory(tick)
 	tick.CalculateIndicators(i.tickHistory.buffer)
+	i.telemetry.Timing(telemetryTickCalculateIndicators, time.Since(indicatorsStart))
 }

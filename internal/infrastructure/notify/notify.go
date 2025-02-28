@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-//go:generate moq --out mocks/notifier.go --pkg mocks --with-resets --skip-ensure . Client
+//go:generate moq --out mocks/client.go --pkg mocks --with-resets --skip-ensure . Client
 //go:generate moq --out mocks/strategy.go --pkg mocks --with-resets --skip-ensure . Strategy
 
 // Event represents a notification event

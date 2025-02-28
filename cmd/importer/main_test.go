@@ -119,7 +119,7 @@ func TestMainApplicationFlow(t *testing.T) {
 				}()
 
 				// Let it run briefly
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(1000 * time.Millisecond)
 
 				// Cancel context to trigger shutdown
 				cancel()

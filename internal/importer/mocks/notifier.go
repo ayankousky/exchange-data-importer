@@ -16,7 +16,7 @@ import (
 //		// make and configure a mocked importer.NotifierService
 //		mockedNotifierService := &NotifierServiceMock{
 //			NotifyFunc: func(ctx context.Context, data any)  {
-//				panic("mock out the notify method")
+//				panic("mock out the Notify method")
 //			},
 //			SubscribeFunc: func(topic string, client notify.Client, strategy notify.Strategy)  {
 //				panic("mock out the Subscribe method")
@@ -60,7 +60,7 @@ type NotifierServiceMock struct {
 // Notify calls NotifyFunc.
 func (mock *NotifierServiceMock) Notify(ctx context.Context, data any) {
 	if mock.NotifyFunc == nil {
-		panic("NotifierServiceMock.NotifyFunc: method is nil but NotifierService.notify was just called")
+		panic("NotifierServiceMock.NotifyFunc: method is nil but NotifierService.Notify was just called")
 	}
 	callInfo := struct {
 		Ctx  context.Context
