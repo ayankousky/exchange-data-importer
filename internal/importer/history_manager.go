@@ -27,7 +27,7 @@ func (i *Importer) initHistory(ctx context.Context) error {
 
 func (i *Importer) addTickHistory(tick *domain.Tick) {
 	lastTick, exists := i.tickHistory.Last()
-	if exists && lastTick.CreatedAt.After(tick.CreatedAt) {
+	if exists && lastTick.StartAt.After(tick.StartAt) {
 		return
 	}
 
