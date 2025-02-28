@@ -30,4 +30,10 @@ dry_run:
 	$(MAKE) build
 	.bin/exchange-importer --exchange.binance.enabled --notify.stdout.topics=TICK_INFO
 
-.PHONY: lint test rtest gen build dry_run
+precommit:
+	
+precommit:
+	$(MAKE) lint
+	$(MAKE) test
+
+.PHONY: lint test rtest gen build dry_run precommit

@@ -294,3 +294,72 @@ func TestCalculateIndicators_EdgeCases(t *testing.T) {
 		assert.Equal(t, int16(1), secondTick.Avg.TickersCount, "Only one ticker should be counted in averages")
 	})
 }
+
+func TestTick_SetTicker(t *testing.T) {
+	t.Run("add new ticker", func(t *testing.T) {
+		// Create a new tick with empty data map
+		tick := &Tick{
+			Data: make(map[TickerName]*Ticker),
+		}
+
+		// Create a ticker
+		ticker := &Ticker{
+			Symbol: "BTCUSDT",
+			Ask:    50000.0,
+			Bid:    49900.0,
+		}
+
+		// Set the ticker in the tick
+		tick.SetTicker(ticker)
+
+		// Verify the ticker was added
+		assert.Contains(t, tick.Data, TickerName("BTCUSDT"), "Ticker should be added to the Data map")
+		assert.Equal(t, ticker, tick.Data["BTCUSDT"], "Stored ticker should be the same instance")
+	})
+
+	t.Run("update existing ticker", func(t *testing.T) {
+		// Create a new tick with existing data
+		tick := &Tick{
+			Data: map[TickerName]*Ticker{
+				"BTCUSDT": {
+					Symbol: "BTCUSDT",
+					Ask:    50000.0,
+					Bid:    49900.0,
+				},
+			},
+		}
+
+		// Create an updated ticker
+		updatedTicker := &Ticker{
+			Symbol: "BTCUSDT",
+			Ask:    51000.0,
+			Bid:    50900.0,
+		}
+
+		// Update the ticker
+		tick.SetTicker(updatedTicker)
+
+		// Verify the ticker was updated
+		assert.Equal(t, updatedTicker, tick.Data["BTCUSDT"], "Ticker should be updated")
+		assert.Equal(t, 51000.0, tick.Data["BTCUSDT"].Ask, "Ask price should be updated")
+	})
+
+	t.Run("nil ticker handling", func(t *testing.T) {
+		// This is an edge case test - technically SetTicker doesn't check for nil,
+		// but we should verify the behavior
+
+		// Create a new tick with empty data map
+		tick := &Tick{
+			Data: make(map[TickerName]*Ticker),
+		}
+
+		// The following would panic if we tried to access Symbol from a nil ticker
+		// So we're checking if this implementation is safe or needs nil protection
+
+		// We expect this to panic because t.Data[ticker.Symbol] would panic on nil.Symbol
+		// Let's verify that with a test that expects a panic
+		assert.Panics(t, func() {
+			tick.SetTicker(nil)
+		}, "SetTicker should panic when given a nil ticker")
+	})
+}
