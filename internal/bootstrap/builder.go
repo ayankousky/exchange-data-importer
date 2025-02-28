@@ -224,10 +224,12 @@ func (b *Builder) WithNotifiers(ctx context.Context) *Builder {
 }
 
 // WithTelemetry initializes telemetry (e.g., metrics and tracing)
-func (b *Builder) WithTelemetry(ctx context.Context) *Builder {
+func (b *Builder) WithTelemetry(ctx context.Context, revision string) *Builder {
 	if b.err != nil {
 		return b
 	}
+
+	revisionTag := fmt.Sprintf("revision:%s", revision)
 
 	// Initialize datadog provider
 	if b.app.options.Telemetry.Datadog.Enabled {
@@ -239,6 +241,7 @@ func (b *Builder) WithTelemetry(ctx context.Context) *Builder {
 			EnableTracing:   b.app.options.Telemetry.Datadog.EnabledTracing,
 			EnableMetrics:   b.app.options.Telemetry.Datadog.EnabledMetrics,
 			EnableProfiling: b.app.options.Telemetry.Datadog.EnabledProfiling,
+			Tags:            []string{revisionTag},
 		}
 
 		fmt.Printf("Datadog Config: %+v\n", datadogConfig)

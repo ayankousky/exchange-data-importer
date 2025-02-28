@@ -12,7 +12,10 @@ import (
 	"github.com/ayankousky/exchange-data-importer/internal/bootstrap"
 )
 
+var revision = "local"
+
 func main() {
+	fmt.Printf("Exchange Data Importer: %s\n", revision)
 	// Create context that can be canceled by system signals
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -23,7 +26,7 @@ func main() {
 		WithExchange(ctx).
 		WithRepository(ctx).
 		WithNotifiers(ctx).
-		WithTelemetry(ctx).
+		WithTelemetry(ctx, revision).
 		Build()
 	if err != nil {
 		fmt.Printf("Error building application: %v\n", err)
