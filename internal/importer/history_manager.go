@@ -50,6 +50,8 @@ func newTickerHistoryMap() *tickerHistoryMap {
 	}
 }
 
+// Get returns the history buffer for a given ticker name
+// If no buffer exists, it creates one
 func (thm *tickerHistoryMap) Get(name domain.TickerName) *utils.RingBuffer[*domain.Ticker] {
 	thm.mu.RLock()
 	history, ok := thm.data[name]
@@ -58,8 +60,7 @@ func (thm *tickerHistoryMap) Get(name domain.TickerName) *utils.RingBuffer[*doma
 	if !ok {
 		thm.mu.Lock()
 		// Double-check after acquiring write lock
-		history, ok = thm.data[name]
-		if !ok {
+		if history, ok = thm.data[name]; !ok {
 			history = utils.NewRingBuffer[*domain.Ticker](domain.MaxTickHistory)
 			thm.data[name] = history
 		}
@@ -70,17 +71,23 @@ func (thm *tickerHistoryMap) Get(name domain.TickerName) *utils.RingBuffer[*doma
 
 // UpdateTicker atomically updates or adds a new ticker to the history
 func (thm *tickerHistoryMap) UpdateTicker(ticker *domain.Ticker) {
+	if ticker == nil {
+		return
+	}
+
 	thm.mu.Lock()
 	defer thm.mu.Unlock()
 
 	history := thm.getOrCreateBuffer(ticker.Symbol)
-	lastTickerData, exists := history.Last()
-	if exists && lastTickerData.CreatedAt.After(ticker.CreatedAt) {
-		// Skip older data
+	lastTicker, exists := history.Last()
+
+	// Skip older data
+	if exists && lastTicker.CreatedAt.After(ticker.CreatedAt) {
 		return
 	}
 
-	if !exists || !lastTickerData.CreatedAt.Truncate(time.Minute).Equal(ticker.CreatedAt.Truncate(time.Minute)) {
+	// Handle minute-based data organization
+	if !exists || !isSameMinute(lastTicker.CreatedAt, ticker.CreatedAt) {
 		// New minute or no previous data - create new entry
 		ticker.Max = ticker.Ask
 		ticker.Min = ticker.Ask
@@ -88,13 +95,8 @@ func (thm *tickerHistoryMap) UpdateTicker(ticker *domain.Ticker) {
 		return
 	}
 
-	if lastTickerData.CreatedAt.After(ticker.CreatedAt) {
-		// Skip older data
-		return
-	}
-
 	// Update existing minute data
-	updateMinuteData(lastTickerData, ticker)
+	updateMinuteData(lastTicker, ticker)
 }
 
 // getOrCreateBuffer returns existing buffer or creates a new one (must be called under lock)
@@ -107,6 +109,11 @@ func (thm *tickerHistoryMap) getOrCreateBuffer(name domain.TickerName) *utils.Ri
 	return history
 }
 
+// isSameMinute checks if two timestamps are in the same minute
+func isSameMinute(t1, t2 time.Time) bool {
+	return t1.Truncate(time.Minute).Equal(t2.Truncate(time.Minute))
+}
+
 // updateMinuteData updates the ticker data for the current minute
 func updateMinuteData(existingTicker, newTicker *domain.Ticker) {
 	existingTicker.Max = math.Max(existingTicker.Max, newTicker.Ask)
@@ -115,7 +122,7 @@ func updateMinuteData(existingTicker, newTicker *domain.Ticker) {
 	existingTicker.Bid = newTicker.Bid
 	existingTicker.CreatedAt = newTicker.CreatedAt
 
-	// Mirror changes to the newTicker ticker
+	// Mirror changes to the new ticker
 	newTicker.Max = existingTicker.Max
 	newTicker.Min = existingTicker.Min
 }
@@ -138,6 +145,10 @@ func (i *Importer) initHistory(ctx context.Context) error {
 }
 
 func (i *Importer) addTickHistory(tick *domain.Tick) {
+	if tick == nil {
+		return
+	}
+
 	lastTick, exists := i.tickHistory.Last()
 	if exists && lastTick.StartAt.After(tick.StartAt) {
 		return
@@ -148,6 +159,10 @@ func (i *Importer) addTickHistory(tick *domain.Tick) {
 
 // addTickerHistory updates the ring buffer for a particular ticker - 1 item per 1 minute
 func (i *Importer) addTickerHistory(ticker *domain.Ticker) {
+	if ticker == nil {
+		return
+	}
+
 	i.tickerHistory.UpdateTicker(ticker)
 }
 

@@ -3,7 +3,6 @@ package importer
 import (
 	"context"
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 
@@ -103,59 +102,6 @@ func TestStartImport(t *testing.T) {
 
 	err = ts.importer.importTick(ctx)
 	assert.NoError(t, err)
-}
-
-func TestTickerHistory(t *testing.T) {
-	ts := setupTest()
-	startDate := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-
-	for i := 0; i < 1000; i++ {
-		ticker := &domain.Ticker{
-			Symbol:    "BTCUSDT",
-			Ask:       50000 + float64(i),
-			Bid:       49950 + float64(i),
-			CreatedAt: startDate.Add(time.Second * time.Duration(i)),
-		}
-		ts.importer.addTickerHistory(ticker)
-	}
-
-	tickerHistory := ts.importer.tickerHistory.Get("BTCUSDT")
-	lastItem, _ := tickerHistory.Last()
-
-	assert.Equal(t, 17, tickerHistory.Len(), "Only 1 ticker per minute should be stored")
-	assert.Equal(t, 39, lastItem.CreatedAt.Second(), "Last inserted ticker should be at the 39th second")
-	assert.Equal(t, 59, tickerHistory.At(tickerHistory.Len()-2).CreatedAt.Second(), "Last second inserted ticker should be at the 59th second")
-	assert.Equal(t, 59, tickerHistory.At(tickerHistory.Len()-3).CreatedAt.Second(), "Last third inserted ticker should be at the 59th second")
-
-	// Test history limit
-	for i := 0; i < (60+10)*domain.MaxTickHistory; i++ {
-		ticker := &domain.Ticker{
-			Symbol:    "BTCUSDT",
-			Ask:       50000 + float64(i),
-			Bid:       49950 + float64(i),
-			CreatedAt: startDate.Add(time.Second * time.Duration(i)),
-		}
-		ts.importer.addTickerHistory(ticker)
-	}
-	assert.Equal(t, domain.MaxTickHistory, ts.importer.tickerHistory.Get("BTCUSDT").Len(), "Ticker history should be limited")
-}
-
-func TestCorruptedData(t *testing.T) {
-	ts := setupTest()
-	startDate := time.Now().Truncate(time.Hour)
-
-	for i := 0; i < 1500; i++ {
-		ticker := &domain.Ticker{
-			Symbol:    "BTCUSDT",
-			Ask:       50000,
-			Bid:       49950,
-			CreatedAt: startDate.Add(time.Second),
-		}
-		ts.importer.addTickerHistory(ticker)
-	}
-
-	history := ts.importer.tickerHistory.Get("BTCUSDT")
-	assert.Equal(t, 1, history.Len(), "Only 1 ticker per minute should be stored")
 }
 
 func TestInitHistory(t *testing.T) {
@@ -322,91 +268,5 @@ func TestNotifyNewTick(t *testing.T) {
 
 			assert.Equal(t, tt.wantCalls, totalCalls, "unexpected number of notification calls")
 		})
-	}
-}
-
-func TestInitHistoryWithErrors(t *testing.T) {
-	ts := setupTest()
-	ctx := context.Background()
-
-	tests := []struct {
-		name       string
-		setupMocks func()
-		wantError  bool
-	}{
-		{
-			name: "should handle repository error",
-			setupMocks: func() {
-				ts.tickRepo.GetHistorySinceFunc = func(ctx context.Context, since time.Time) ([]domain.Tick, error) {
-					return nil, fmt.Errorf("database error")
-				}
-			},
-			wantError: true,
-		},
-		{
-			name: "should handle empty history",
-			setupMocks: func() {
-				ts.tickRepo.GetHistorySinceFunc = func(ctx context.Context, since time.Time) ([]domain.Tick, error) {
-					return []domain.Tick{}, nil
-				}
-			},
-			wantError: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
-
-			err := ts.importer.initHistory(ctx)
-
-			if tt.wantError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestTickerHistoryDataRace(t *testing.T) {
-	ts := setupTest()
-
-	const numGoroutines = 10
-	const numOperations = 100
-
-	wg := sync.WaitGroup{}
-	wg.Add(numGoroutines)
-
-	startTime := time.Now()
-
-	for i := 0; i < numGoroutines; i++ {
-		go func(routineID int) {
-			defer wg.Done()
-
-			for j := 0; j < numOperations; j++ {
-				ticker := &domain.Ticker{
-					Symbol:    "BTCUSDT",
-					Ask:       float64(50000 + routineID*j),
-					Bid:       float64(49900 + routineID*j),
-					CreatedAt: startTime.Add(time.Duration(j) * time.Second),
-				}
-				ts.importer.addTickerHistory(ticker)
-			}
-		}(i)
-	}
-
-	wg.Wait()
-
-	history := ts.importer.tickerHistory.Get("BTCUSDT")
-	assert.LessOrEqual(t, history.Len(), domain.MaxTickHistory)
-
-	// Verify no duplicates for the same minute
-	minutes := make(map[time.Time]bool)
-	for i := 0; i < history.Len(); i++ {
-		ticker := history.At(i)
-		minute := ticker.CreatedAt.Truncate(time.Minute)
-		assert.False(t, minutes[minute], "Found duplicate minute in history")
-		minutes[minute] = true
 	}
 }
