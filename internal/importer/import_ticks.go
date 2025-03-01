@@ -3,12 +3,11 @@ package importer
 import (
 	"context"
 	"fmt"
-	"runtime"
-	"sync"
 	"time"
 
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges"
+	"github.com/ayankousky/exchange-data-importer/pkg/utils/workerpool"
 	"go.uber.org/zap"
 )
 
@@ -116,7 +115,20 @@ func (i *Importer) buildTick(ctx context.Context, tick *domain.Tick, eTickers []
 
 	lastTick, _ := i.getLastTick()
 
-	// Set liquidations data
+	// Extract this to a separate function
+	i.populateLiquidationsData(ctx, tick)
+
+	// Extract ticker processing to a separate function
+	i.processTickers(tick, lastTick, eTickers)
+
+	// Calculate tick indicators
+	indicatorsStart := time.Now()
+	i.addTickHistory(tick)
+	tick.CalculateIndicators(i.tickHistory.buffer)
+	i.telemetry.Timing(telemetryTickCalculateIndicators, time.Since(indicatorsStart))
+}
+
+func (i *Importer) populateLiquidationsData(ctx context.Context, tick *domain.Tick) {
 	liqStart := time.Now()
 	liquidationsHistory, err := i.liquidationRepository.GetLiquidationsHistory(ctx, tick.StartAt)
 	if err != nil {
@@ -131,43 +143,35 @@ func (i *Importer) buildTick(ctx context.Context, tick *domain.Tick, eTickers []
 	tick.SL10 = liquidationsHistory.ShortLiquidations10s
 
 	i.telemetry.Timing(telemetryTickBuildSetLiquidations, time.Since(liqStart))
+}
 
-	// Handle tickers data in parallel
-	wg := sync.WaitGroup{}
-	numWorkers := runtime.NumCPU()
-	taskChannel := make(chan exchanges.Ticker, numWorkers)
+func (i *Importer) processTickers(tick *domain.Tick, lastTick *domain.Tick, eTickers []exchanges.Ticker) {
+	if len(eTickers) == 0 {
+		return
+	}
+
+	numWorkers := workerpool.CalculateOptimalWorkers(len(eTickers))
+	pool := workerpool.New[exchanges.Ticker](numWorkers)
 	resultChannel := make(chan *domain.Ticker, len(eTickers))
-	worker := func(tasks <-chan exchanges.Ticker, results chan<- *domain.Ticker) {
-		defer func() {
-			if r := recover(); r != nil {
-				i.logger.Error("Worker panic", zap.Any("panic", r))
-			}
-		}()
 
-		for exchangeTicker := range tasks {
-			ticker, err := i.buildTicker(*tick, lastTick, exchangeTicker)
+	pool.Start(func(taskCh <-chan exchanges.Ticker) {
+		for eTicker := range taskCh {
+			ticker, err := i.buildTicker(*tick, lastTick, eTicker)
 			if err != nil {
 				i.logger.Error("Error building ticker", zap.Error(err))
 				continue
 			}
-			results <- ticker
+			resultChannel <- ticker
 		}
-	}
-
-	for w := 0; w < numWorkers; w++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			worker(taskChannel, resultChannel)
-		}()
-	}
+	})
 
 	for _, eTicker := range eTickers {
-		taskChannel <- eTicker
+		pool.Submit(eTicker)
 	}
-	close(taskChannel)
+	pool.CloseTaskChannel()
+
 	go func() {
-		wg.Wait()
+		pool.Wait()
 		close(resultChannel)
 	}()
 
@@ -178,12 +182,6 @@ func (i *Importer) buildTick(ctx context.Context, tick *domain.Tick, eTickers []
 	}
 
 	i.telemetry.Gauge(telemetryTickBuildTickersProcessed, float64(tickersProcessed))
-
-	// Calculate tick indicators
-	indicatorsStart := time.Now()
-	i.addTickHistory(tick)
-	tick.CalculateIndicators(i.tickHistory.buffer)
-	i.telemetry.Timing(telemetryTickCalculateIndicators, time.Since(indicatorsStart))
 }
 
 func (i *Importer) buildTicker(currTick domain.Tick, lastTick *domain.Tick, eTicker exchanges.Ticker) (*domain.Ticker, error) {

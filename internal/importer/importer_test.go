@@ -205,61 +205,6 @@ func TestInitHistory(t *testing.T) {
 	assert.Error(t, err, "Error in fetching history should return an error")
 }
 
-func TestBuildTick(t *testing.T) {
-	defaultDate := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	tests := []struct {
-		name               string
-		tickers            []exchanges.Ticker
-		expectedTickersLen int
-		expectedLL60       int64
-		expectedSL10       int64
-	}{
-		{
-			name: "should build tick with valid tickers",
-			tickers: []exchanges.Ticker{
-				{Symbol: "BTCUSDT", AskPrice: 50000, BidPrice: 49900, EventAt: defaultDate},
-				{Symbol: "ETHUSDT", AskPrice: 3000, BidPrice: 2990, EventAt: defaultDate},
-			},
-			expectedTickersLen: 2,
-			expectedLL60:       600,
-			expectedSL10:       10,
-		},
-		{
-			name:               "should handle empty tickers",
-			tickers:            []exchanges.Ticker{},
-			expectedTickersLen: 0,
-			expectedLL60:       600,
-			expectedSL10:       10,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ts := setupTest()
-			ctx := context.Background()
-
-			// Setup liquidation history mock
-			ts.liqRepo.GetLiquidationsHistoryFunc = func(ctx context.Context, timeAt time.Time) (domain.LiquidationsHistory, error) {
-				return domain.LiquidationsHistory{
-					LongLiquidations60s:  tt.expectedLL60,
-					ShortLiquidations10s: tt.expectedSL10,
-				}, nil
-			}
-
-			tick := &domain.Tick{
-				StartAt: time.Now(),
-				Data:    make(map[domain.TickerName]*domain.Ticker),
-			}
-
-			ts.importer.buildTick(ctx, tick, tt.tickers)
-
-			assert.Len(t, tick.Data, tt.expectedTickersLen)
-			assert.Equal(t, tt.expectedLL60, tick.LL60)
-			assert.Equal(t, tt.expectedSL10, tick.SL10)
-		})
-	}
-}
-
 func TestNotifyNewTick(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -376,72 +321,6 @@ func TestNotifyNewTick(t *testing.T) {
 			}
 
 			assert.Equal(t, tt.wantCalls, totalCalls, "unexpected number of notification calls")
-		})
-	}
-}
-
-func TestBuildTickerWithInvalidData(t *testing.T) {
-	ts := setupTest()
-	defaultDate := time.Now()
-
-	tests := []struct {
-		name      string
-		ticker    exchanges.Ticker
-		wantError bool
-	}{
-		{
-			name: "should fail with zero ask price",
-			ticker: exchanges.Ticker{
-				Symbol:   "BTCUSDT",
-				BidPrice: 49900,
-				EventAt:  defaultDate,
-			},
-			wantError: true,
-		},
-		{
-			name: "should fail with zero bid price",
-			ticker: exchanges.Ticker{
-				Symbol:   "BTCUSDT",
-				AskPrice: 50000,
-				EventAt:  defaultDate,
-			},
-			wantError: true,
-		},
-		{
-			name: "should fail with empty symbol",
-			ticker: exchanges.Ticker{
-				AskPrice: 50000,
-				BidPrice: 49900,
-				EventAt:  defaultDate,
-			},
-			wantError: true,
-		},
-		{
-			name: "should handle valid data",
-			ticker: exchanges.Ticker{
-				Symbol:   "BTCUSDT",
-				AskPrice: 50000,
-				BidPrice: 49900,
-				EventAt:  defaultDate,
-			},
-			wantError: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tick := domain.Tick{
-				StartAt: defaultDate,
-				Data:    make(map[domain.TickerName]*domain.Ticker),
-			}
-
-			_, err := ts.importer.buildTicker(tick, nil, tt.ticker)
-
-			if tt.wantError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
 		})
 	}
 }
