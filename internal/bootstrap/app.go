@@ -38,9 +38,12 @@ func (a *App) Start(ctx context.Context) error {
 			a.logger.Warn("Error adding notifier", zap.Error(err))
 		}
 	}
+	a.importer.
+		WithLiquidationsImport().
+		WithTicksImport()
 
-	// Start handling imports
-	if err := a.importer.Start(ctx); err != nil {
+	// Run handling imports
+	if err := a.importer.Run(ctx); err != nil {
 		return fmt.Errorf("starting import loop: %w", err)
 	}
 

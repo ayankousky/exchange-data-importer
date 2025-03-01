@@ -1,5 +1,3 @@
-// file: internal/domain/error_test.go
-
 package domain
 
 import (

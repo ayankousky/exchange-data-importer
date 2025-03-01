@@ -12,6 +12,38 @@ import (
 	"go.uber.org/zap"
 )
 
+// runTickersImport runs the tickers import process
+func (i *Importer) runTickersImport(ctx context.Context) error {
+	// Initialize the history data for calculating tick indicators
+	if err := i.initHistory(ctx); err != nil {
+		return fmt.Errorf("failed to init history: %w", err)
+	}
+
+	// Import should be started exactly at the beginning of the next second
+	now := time.Now()
+	nextSecond := now.Truncate(time.Second).Add(time.Second)
+	time.Sleep(time.Until(nextSecond))
+
+	// Start the import loop with the specified interval
+	timeTicker := time.NewTicker(defaultTickInterval)
+	defer timeTicker.Stop()
+
+	i.logger.Info("Started tickers import")
+
+	for {
+		select {
+		case <-ctx.Done():
+			i.logger.Info("Tickers import stopped (context canceled)")
+			return ctx.Err()
+		case <-timeTicker.C:
+			// Attempt to import a single "tick" of data
+			if err := i.importTick(ctx); err != nil {
+				i.logger.Error("Error importing tick", zap.Error(err))
+			}
+		}
+	}
+}
+
 func (i *Importer) importTick(ctx context.Context) error {
 	span, ctx := i.telemetry.StartSpan(ctx, telemetrySpanImportTick)
 	defer span.Finish()
@@ -152,4 +184,22 @@ func (i *Importer) buildTick(ctx context.Context, tick *domain.Tick, eTickers []
 	i.addTickHistory(tick)
 	tick.CalculateIndicators(i.tickHistory.buffer)
 	i.telemetry.Timing(telemetryTickCalculateIndicators, time.Since(indicatorsStart))
+}
+
+func (i *Importer) buildTicker(currTick domain.Tick, lastTick *domain.Tick, eTicker exchanges.Ticker) (*domain.Ticker, error) {
+	ticker := &domain.Ticker{
+		Symbol:    domain.TickerName(eTicker.Symbol),
+		Ask:       eTicker.AskPrice,
+		Bid:       eTicker.BidPrice,
+		EventAt:   eTicker.EventAt,
+		CreatedAt: currTick.StartAt,
+	}
+
+	if err := ticker.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid ticker data: %v", err)
+	}
+
+	i.addTickerHistory(ticker)
+	ticker.CalculateIndicators(i.tickerHistory.Get(ticker.Symbol), lastTick)
+	return ticker, nil
 }

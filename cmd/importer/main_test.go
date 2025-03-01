@@ -110,7 +110,7 @@ func TestMainApplicationFlow(t *testing.T) {
 			if err == nil {
 				require.NotNil(t, app)
 
-				// Start the application (don't wait for completion)
+				// Run the application (don't wait for completion)
 				go func() {
 					startErr := app.Start(ctx)
 					if startErr != nil {
