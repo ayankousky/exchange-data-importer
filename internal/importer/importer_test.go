@@ -270,3 +270,226 @@ func TestNotifyNewTick(t *testing.T) {
 		})
 	}
 }
+
+func TestNew(t *testing.T) {
+	// Test successful creation
+	exchange := &exchangeMocks.ExchangeMock{
+		GetNameFunc: func() string {
+			return "mockExchange"
+		},
+	}
+
+	tickRepo := &domainMocks.TickRepositoryMock{}
+	liqRepo := &domainMocks.LiquidationRepositoryMock{}
+
+	repoFactory := &importerMocks.RepositoryFactoryMock{
+		GetTickRepositoryFunc: func(name string) (domain.TickRepository, error) {
+			assert.Equal(t, "mockExchange", name)
+			return tickRepo, nil
+		},
+		GetLiquidationRepositoryFunc: func(name string) (domain.LiquidationRepository, error) {
+			assert.Equal(t, "mockExchange", name)
+			return liqRepo, nil
+		},
+	}
+
+	notifierService := notifier.New(zap.NewNop())
+	telemetryProvider := telemetry.NoopProvider{}
+	logger := zap.NewNop()
+
+	cfg := &Config{
+		Exchange:          exchange,
+		RepositoryFactory: repoFactory,
+		NotifierService:   notifierService,
+		Telemetry:         &telemetryProvider,
+		Logger:            logger,
+	}
+
+	importer := New(cfg)
+	assert.NotNil(t, importer)
+	assert.Equal(t, exchange, importer.exchange)
+	assert.Equal(t, tickRepo, importer.tickRepository)
+	assert.Equal(t, liqRepo, importer.liquidationRepository)
+	assert.Equal(t, notifierService, importer.notifier)
+	assert.Equal(t, &telemetryProvider, importer.telemetry)
+	assert.Equal(t, logger, importer.logger)
+	assert.False(t, importer.importTicks)
+	assert.False(t, importer.importLiquidations)
+
+	// Test creation with tick repository errors
+	repoFactory.GetTickRepositoryFunc = func(name string) (domain.TickRepository, error) {
+		return nil, fmt.Errorf("tick repo error")
+	}
+
+	importer = New(cfg)
+	assert.Nil(t, importer)
+
+	// Reset and test liquidation repository error
+	repoFactory.GetTickRepositoryFunc = func(name string) (domain.TickRepository, error) {
+		return tickRepo, nil
+	}
+	repoFactory.GetLiquidationRepositoryFunc = func(name string) (domain.LiquidationRepository, error) {
+		return nil, fmt.Errorf("liquidation repo error")
+	}
+
+	importer = New(cfg)
+	assert.Nil(t, importer)
+}
+
+func TestWithTicksImport(t *testing.T) {
+	ts := setupTest()
+
+	// Test successful enabling
+	result := ts.importer.WithTicksImport()
+	assert.Equal(t, ts.importer, result)
+	assert.True(t, ts.importer.importTicks)
+
+	// Test with nil repository
+	ts.importer.tickRepository = nil
+	result = ts.importer.WithTicksImport()
+	assert.Equal(t, ts.importer, result)
+	assert.False(t, ts.importer.importTicks)
+}
+
+func TestWithLiquidationsImport(t *testing.T) {
+	ts := setupTest()
+
+	// Test successful enabling
+	result := ts.importer.WithLiquidationsImport()
+	assert.Equal(t, ts.importer, result)
+	assert.True(t, ts.importer.importLiquidations)
+
+	// Test with nil repository
+	ts.importer.liquidationRepository = nil
+	result = ts.importer.WithLiquidationsImport()
+	assert.Equal(t, ts.importer, result)
+	assert.False(t, ts.importer.importLiquidations)
+}
+
+func TestRun(t *testing.T) {
+	ts := setupTest()
+
+	// Test with no imports enabled
+	ts.importer.importTicks = false
+	ts.importer.importLiquidations = false
+	err := ts.importer.Run(context.Background())
+	assert.NoError(t, err)
+
+	// Test with ticks import only
+	ts.importer.importTicks = true
+	ts.importer.importLiquidations = false
+
+	// Setup tick repository to immediately return when called
+	initHistoryCalled := false
+	ts.tickRepo.GetHistorySinceFunc = func(ctx context.Context, since time.Time) ([]domain.Tick, error) {
+		initHistoryCalled = true
+		return []domain.Tick{}, nil
+	}
+
+	// Setup ticker fetch to cancel context when called
+	fetchCalled := false
+	ts.exchange.FetchTickersFunc = func(ctx context.Context) ([]exchanges.Ticker, error) {
+		fetchCalled = true
+		return []exchanges.Ticker{}, nil
+	}
+
+	// Run with cancellable context
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// We need to wait longer than the sleep period in runTickersImport
+	// The import waits until the beginning of the next second
+	go func() {
+		// Wait 2 seconds to ensure the ticker import has started
+		time.Sleep(2 * time.Second)
+		cancel()
+	}()
+
+	err = ts.importer.Run(ctx)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.True(t, initHistoryCalled, "initHistory should be called")
+	assert.True(t, fetchCalled, "FetchTickers should be called")
+
+	// Test with liquidations import only
+	ts.importer.importTicks = false
+	ts.importer.importLiquidations = true
+
+	// Setup liquidation subscription
+	liquidationCalled := false
+	liqChan := make(chan exchanges.Liquidation)
+	errChan := make(chan error)
+	ts.exchange.SubscribeLiquidationsFunc = func(ctx context.Context) (<-chan exchanges.Liquidation, <-chan error) {
+		liquidationCalled = true
+		return liqChan, errChan
+	}
+
+	// Run with cancellable context
+	ctx, cancel = context.WithCancel(context.Background())
+	go func() {
+		// Wait for liquidation import to start
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+
+	err = ts.importer.Run(ctx)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.True(t, liquidationCalled, "SubscribeLiquidations should be called")
+
+	// Test with both imports enabled
+	ts.importer.importTicks = true
+	ts.importer.importLiquidations = true
+
+	// Reset tracking variables
+	initHistoryCalled = false
+	fetchCalled = false
+	liquidationCalled = false
+
+	// Run with cancellable context
+	ctx, cancel = context.WithCancel(context.Background())
+	go func() {
+		// Wait longer to ensure ticker import starts after the sleep period
+		time.Sleep(2 * time.Second)
+		cancel()
+	}()
+
+	err = ts.importer.Run(ctx)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.True(t, initHistoryCalled, "initHistory should be called")
+	assert.True(t, fetchCalled, "FetchTickers should be called")
+	assert.True(t, liquidationCalled, "SubscribeLiquidations should be called")
+}
+
+func TestWithNotifier(t *testing.T) {
+	// Create mock notifier service
+	mockNotifier := &importerMocks.NotifierServiceMock{
+		SubscribeFunc: func(topic string, client notify.Client, strategy notify.Strategy) {
+			// Verify subscribe parameters
+			assert.Equal(t, "test_topic", topic)
+			assert.NotNil(t, client)
+			assert.NotNil(t, strategy)
+		},
+	}
+
+	// Create importer with mock notifier
+	importer := &Importer{
+		notifier: mockNotifier,
+		logger:   zap.NewNop(),
+	}
+
+	// Create mock client and strategy
+	mockClient := &notifyMock.ClientMock{}
+	mockStrategy := &notifyMock.StrategyMock{}
+
+	// Call WithNotifier
+	err := importer.WithNotifier(mockClient, "test_topic", mockStrategy)
+	assert.NoError(t, err)
+
+	// Verify notifier.Subscribe was called
+	assert.Equal(t, 1, len(mockNotifier.SubscribeCalls()))
+	call := mockNotifier.SubscribeCalls()[0]
+	assert.Equal(t, "test_topic", call.Topic)
+	assert.Equal(t, mockClient, call.Client)
+	assert.Equal(t, mockStrategy, call.Strategy)
+}

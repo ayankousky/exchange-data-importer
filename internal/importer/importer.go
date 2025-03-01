@@ -82,6 +82,7 @@ func New(cfg *Config) *Importer {
 // WithTicksImport enables tick import for this importer
 func (i *Importer) WithTicksImport() *Importer {
 	if i.tickRepository == nil {
+		i.importTicks = false
 		i.logger.Error("No tick repository found. Skipping ticks import")
 		return i
 	}
@@ -92,6 +93,7 @@ func (i *Importer) WithTicksImport() *Importer {
 // WithLiquidationsImport enables liquidations import for this importer
 func (i *Importer) WithLiquidationsImport() *Importer {
 	if i.liquidationRepository == nil {
+		i.importLiquidations = false
 		i.logger.Error("No liquidation repository found. Skipping liquidations import")
 		return i
 	}
