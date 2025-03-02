@@ -222,6 +222,12 @@ func (bc *Client) processMessage(ctx context.Context, msg []byte, out chan<- exc
 		return err
 	}
 
+	// Filter liquidation based on allowed symbols
+	isAllowed := IsSymbolAllowed(liquidation.Symbol)
+	if !isAllowed {
+		return nil
+	}
+
 	select {
 	case out <- liquidation:
 		return nil
