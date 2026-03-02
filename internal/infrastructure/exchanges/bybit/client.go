@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/ayankousky/exchange-data-importer/internal/infrastructure/exchanges"
@@ -165,91 +164,90 @@ func (bc *Client) handleLiquidationSubscription(ctx context.Context, out chan<- 
 
 // connectAndHandle establishes and manages a single websocket connection
 func (bc *Client) connectAndHandle(ctx context.Context, out chan<- exchanges.Liquidation, errCh chan<- error) error {
-	conn, _, err := websocket.DefaultDialer.Dial(bc.wsURL, nil)
-	if err != nil {
-		return fmt.Errorf("websocket dial: %w", err)
-	}
-	defer conn.Close()
+    conn, _, err := websocket.DefaultDialer.Dial(bc.wsURL, nil)
+    if err != nil {
+       return fmt.Errorf("websocket dial: %w", err)
+    }
+    defer conn.Close()
 
-	availableTickers := bc.getAvailableTickers()
-	if len(availableTickers) == 0 {
-		return nil
-	}
+    availableTickers := bc.getAvailableTickers()
+    if len(availableTickers) == 0 {
+       return nil
+    }
 
-	// Subscribe to liquidations topic
-	tickersToSubscribe := make([]string, 0, len(availableTickers))
-	for _, ticker := range availableTickers {
-		tickersToSubscribe = append(tickersToSubscribe, fmt.Sprintf("liquidation.%s", ticker))
-	}
-	subscribeMsg := map[string]any{
-		"op":     "subscribe",
-		"req_id": "liquidations",
-		"args":   tickersToSubscribe,
-	}
-	if err := conn.WriteJSON(subscribeMsg); err != nil {
-		return fmt.Errorf("subscribing to liquidation topic: %w", err)
-	}
+    tickersToSubscribe := make([]string, 0, len(availableTickers))
+    for _, ticker := range availableTickers {
+       tickersToSubscribe = append(tickersToSubscribe, fmt.Sprintf("allLiquidation.%s", ticker))
+    }
 
-	return bc.readMessages(ctx, conn, out, errCh)
+    subscribeMsg := map[string]any{
+       "op":     "subscribe",
+       "req_id": "liquidations",
+       "args":   tickersToSubscribe,
+    }
+
+    if err := conn.WriteJSON(subscribeMsg); err != nil {
+       return fmt.Errorf("subscribing to liquidation topic: %w", err)
+    }
+
+    return bc.readMessages(ctx, conn, out, errCh)
 }
 
 // readMessages reads and processes messages from the websocket connection
+// readMessages reads and processes messages from the websocket connection
 func (bc *Client) readMessages(ctx context.Context, conn *websocket.Conn, out chan<- exchanges.Liquidation, errCh chan<- error) error {
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
-			if err := conn.SetReadDeadline(time.Now().Add(DefaultWebsocketTimeout)); err != nil {
-				return fmt.Errorf("setting read deadline: %w", err)
-			}
+    for {
+        select {
+        case <-ctx.Done():
+            return ctx.Err()
+        default:
+            if err := conn.SetReadDeadline(time.Now().Add(DefaultWebsocketTimeout)); err != nil {
+                return fmt.Errorf("setting read deadline: %w", err)
+            }
 
-			_, msg, err := conn.ReadMessage()
-			if err != nil {
-				return fmt.Errorf("reading message: %w", err)
-			}
+            _, message, err := conn.ReadMessage()
+            if err != nil {
+                return fmt.Errorf("reading message: %w", err)
+            }
 
-			if err := bc.processMessage(ctx, msg, out, errCh); err != nil {
-				log.Printf("Warning: message processing error: %v", err)
-			}
-		}
-	}
+            var event LiquidationEvent
+            if err := json.Unmarshal(message, &event); err != nil {
+                select {
+                case errCh <- fmt.Errorf("unmarshaling message: %w", err):
+                default:
+                    log.Printf("unmarshaling message error: %v", err)
+                }
+                continue
+            }
+
+            // skip subscription confirmations and other non-data messages
+            if len(event.Data) == 0 {
+                continue
+            }
+
+            // iterate over liquidations in the data array
+            for _, liquidationDTO := range event.Data {
+                liquidation, err := liquidationDTO.toLiquidation()
+                if err != nil {
+                    select {
+                    case errCh <- fmt.Errorf("converting liquidation: %w", err):
+                    default:
+                        log.Printf("converting liquidation error: %v", err)
+                    }
+                    continue
+                }
+
+                select {
+                case out <- liquidation:
+                case <-ctx.Done():
+                    return ctx.Err()
+                }
+            }
+        }
+    }
 }
 
-// processMessage handles the deserialization and conversion of websocket messages
-func (bc *Client) processMessage(ctx context.Context, msg []byte, out chan<- exchanges.Liquidation, errCh chan<- error) error {
-	var event LiquidationEvent
-	if err := json.Unmarshal(msg, &event); err != nil {
-		select {
-		case errCh <- err:
-		default:
-			log.Printf("unmarshaling message error: %v", err)
-		}
-		return err
-	}
 
-	// Skip non-liquidation messages
-	if !strings.HasPrefix(event.Topic, "liquidation") {
-		return nil
-	}
-
-	liquidation, err := event.Data.toLiquidation()
-	if err != nil {
-		select {
-		case errCh <- err:
-		default:
-			log.Printf("converting liquidation error: %v", err)
-		}
-		return err
-	}
-
-	select {
-	case out <- liquidation:
-		return nil
-	case <-ctx.Done():
-		return fmt.Errorf("context canceled")
-	}
-}
 
 //------------------------------------------------------------------------------
 // Other methods

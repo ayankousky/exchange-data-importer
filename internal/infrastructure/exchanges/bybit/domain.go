@@ -72,19 +72,19 @@ func (bt TickerDTO) toTicker() (exchanges.Ticker, error) {
 
 // LiquidationEvent represents a liquidation websocket event
 type LiquidationEvent struct {
-	Topic string         `json:"topic"`
-	Type  string         `json:"type"`
-	Data  LiquidationDTO `json:"data"`
-	TS    int64          `json:"ts"`
+    Topic string             `json:"topic"`
+    Type  string             `json:"type"`
+    Data  []LiquidationDTO   `json:"data"`  // changed to array
+    TS    int64              `json:"ts"`
 }
 
 // LiquidationDTO represents a liquidation order from Bybit
 type LiquidationDTO struct {
-	Symbol      string `json:"symbol"`
-	Side        string `json:"side"`
-	Price       string `json:"price"`
-	Quantity    string `json:"size"`
-	UpdatedTime int64  `json:"updatedTime"`
+	Symbol      string `json:"s"`
+	Side        string `json:"S"`
+	Price       string `json:"p"`
+	Quantity    string `json:"v"`
+	UpdatedTime int64  `json:"T"`
 }
 
 // toLiquidation converts a LiquidationDTO to an exchanges.Liquidation

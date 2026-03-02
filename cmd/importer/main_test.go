@@ -63,7 +63,7 @@ func TestMainApplicationFlow(t *testing.T) {
 				os.Setenv("ENV", "test")
 				os.Setenv("SERVICE_NAME", "test-service")
 				os.Setenv("EXCHANGE_BINANCE_ENABLED", "true")
-				// Using memory repository by default
+				// using memory repository by default
 			},
 			validate: func(t *testing.T, err error) {
 				assert.NoError(t, err)
@@ -87,17 +87,17 @@ func TestMainApplicationFlow(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Clear environment before each test
+			// clear environment before each test
 			os.Clearenv()
 
-			// Setup test environment
+			// setup test environment
 			tt.setup()
 
-			// Create shorter timeout for tests
+			// create shorter timeout for tests
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			defer cancel()
 
-			// Build the application
+			// build the application
 			app, err := bootstrap.NewBuilder().
 				WithLogger(ctx).
 				WithExchange(ctx).
@@ -110,7 +110,7 @@ func TestMainApplicationFlow(t *testing.T) {
 			if err == nil {
 				require.NotNil(t, app)
 
-				// Run the application (don't wait for completion)
+				// run the application (don't wait for completion)
 				go func() {
 					startErr := app.Start(ctx)
 					if startErr != nil {
@@ -118,13 +118,13 @@ func TestMainApplicationFlow(t *testing.T) {
 					}
 				}()
 
-				// Let it run briefly
+				// let it run briefly
 				time.Sleep(1000 * time.Millisecond)
 
-				// Cancel context to trigger shutdown
+				// cancel context to trigger shutdown
 				cancel()
 
-				// Wait briefly to allow for cleanup
+				// wait briefly to allow for cleanup
 				time.Sleep(100 * time.Millisecond)
 			}
 		})

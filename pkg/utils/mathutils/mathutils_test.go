@@ -6,7 +6,7 @@ import (
 )
 
 func TestPercDiff(t *testing.T) {
-	// Test cases for PercDiff
+	// test cases for PercDiff
 	tests := []struct {
 		name     string
 		curr     float64
@@ -31,7 +31,7 @@ func TestPercDiff(t *testing.T) {
 }
 
 func TestClamp(t *testing.T) {
-	// Test cases for Clamp
+	// test cases for Clamp
 	tests := []struct {
 		name     string
 		val      float64
@@ -55,7 +55,7 @@ func TestClamp(t *testing.T) {
 }
 
 func TestRound(t *testing.T) {
-	// Test cases for Round
+	// test cases for Round
 	tests := []struct {
 		name     string
 		val      float64

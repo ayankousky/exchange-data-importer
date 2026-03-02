@@ -21,7 +21,7 @@ func New[T any](numWorkers int) *Pool[T] {
 
 	return &Pool[T]{
 		numWorkers: numWorkers,
-		taskCh:     make(chan T, numWorkers*2), // Buffer size to reduce contention
+		taskCh:     make(chan T, numWorkers*2), // buffer size to reduce contention
 	}
 }
 
@@ -61,7 +61,7 @@ func (wp *Pool[T]) Wait() {
 func CalculateOptimalWorkers(inputSize int) int {
 	cpus := runtime.NumCPU()
 
-	// For small inputs, don't use too many workers
+	// for small inputs, don't use too many workers
 	if inputSize < 10 {
 		return 1
 	} else if inputSize < 100 {

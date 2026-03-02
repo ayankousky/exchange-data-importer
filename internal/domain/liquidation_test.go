@@ -10,11 +10,11 @@ import (
 func TestLiquidation_Validate(t *testing.T) {
 	defaultDate := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 
-	// Create valid orders for testing
+	// create valid orders for testing
 	validLongLiquidationOrder := Order{
 		EventAt:    defaultDate,
 		Symbol:     "BTCUSDT",
-		Side:       OrderSideSell, // Long liquidation uses SELL side
+		Side:       OrderSideSell, // long liquidation uses SELL side
 		Price:      50000.0,
 		Quantity:   1.0,
 		TotalPrice: 50000.0,
@@ -23,7 +23,7 @@ func TestLiquidation_Validate(t *testing.T) {
 	validShortLiquidationOrder := Order{
 		EventAt:    defaultDate,
 		Symbol:     "BTCUSDT",
-		Side:       OrderSideBuy, // Short liquidation uses BUY side
+		Side:       OrderSideBuy, // short liquidation uses BUY side
 		Price:      50000.0,
 		Quantity:   1.0,
 		TotalPrice: 50000.0,

@@ -16,11 +16,11 @@ var revision = "local"
 
 func main() {
 	fmt.Printf("Exchange Data Importer: %s\n", revision)
-	// Create context that can be canceled by system signals
+	// create context that can be canceled by system signals
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Build the application
+	// build the application
 	app, err := bootstrap.NewBuilder().
 		WithLogger(ctx).
 		WithExchange(ctx).
@@ -33,13 +33,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Start the application
+	// start the application
 	if err := app.Start(ctx); err != nil {
 		fmt.Printf("Error starting application: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Wait for shutdown signal
+	// wait for shutdown signal
 	<-ctx.Done()
 	fmt.Println("Shutting down gracefully...")
 }

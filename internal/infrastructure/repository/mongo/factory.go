@@ -6,6 +6,7 @@ import (
 
 	"github.com/ayankousky/exchange-data-importer/internal/domain"
 	"go.mongodb.org/mongo-driver/mongo"
+    "go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // Factory is a factory for creating mongo repositories
@@ -25,6 +26,7 @@ func (f *Factory) GetTickRepository(name string) (domain.TickRepository, error) 
 	// create required indexes
 	_, err := db.Indexes().CreateOne(context.Background(), mongo.IndexModel{
 		Keys: map[string]any{"created_at": 1},
+        Options: options.Index().SetExpireAfterSeconds(10 * 24 * 60 * 60),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error creating index for tick repository: %w", err)

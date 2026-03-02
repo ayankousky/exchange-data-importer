@@ -7,14 +7,14 @@ GIT_REV=$(shell printf "%s-%s-%s" "$(BRANCH)" "$(HASH)" "$(TIMESTAMP)")
 REV=$(if $(filter --,$(GIT_REV)),latest,$(GIT_REV)) # fallback to latest if not in git repo
 
 lint:
-	golangci-lint run
+	@golangci-lint run
 
 test:
-	go clean -testcache
-	go test -race -coverprofile=coverage.out ./...
-	grep -v "_mock.go" coverage.out | grep -v mocks > coverage_no_mocks.out
-	go tool cover -func=coverage_no_mocks.out
-	rm coverage.out coverage_no_mocks.out
+	@go clean -testcache
+	@go test -race -coverprofile=coverage.out ./...
+	@grep -v "_mock.go" coverage.out | grep -v mocks > coverage_no_mocks.out
+	@go tool cover -func=coverage_no_mocks.out
+	@rm coverage.out coverage_no_mocks.out
 
 rtest:
 	go test -race -cover -timeout 5s ./...
@@ -30,8 +30,9 @@ dry_run:
 	$(MAKE) build
 	.bin/exchange-importer --exchange.binance.enabled --notify.stdout.topics=TICK_INFO
 
-precommit:
+push:
 	$(MAKE) lint
 	$(MAKE) test
+	git push
 
-.PHONY: lint test rtest gen build dry_run precommit
+.PHONY: lint test rtest gen build dry_run push

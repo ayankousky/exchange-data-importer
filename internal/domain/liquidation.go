@@ -42,7 +42,7 @@ func (l *Liquidation) Validate() error {
 		}
 	}
 
-	// Validate the order - this already checks the order side validity
+	// validate the order - this already checks the order side validity
 	if err := l.Order.Validate(); err != nil {
 		return ValidationError{
 			Field: "Order",
